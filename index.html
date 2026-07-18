@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>Shiomi AR Flood</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- three.js 本体 -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+
+  <!-- WebXR ARボタン -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/vr/ARButton.js"></script>
+
+  <!-- GLTFローダー -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/loaders/GLTFLoader.js"></script>
+
+  <!-- メインスクリプト -->
+  <script src="script.js" defer></script>
+
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: system-ui, sans-serif;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      font-size: 12px;
+      border-radius: 4px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    カメラを起動して、机の上に潮見の街を表示します。<br>
+    ARボタンを押して体験を開始してください。
+  </div>
+</body>
+</html>
