@@ -27,10 +27,9 @@
     #startBtn { background:#c40000; color:#fff; }
     #stopBtn { background:#333; color:#fff; }
     #largerBtn,#smallerBtn { background:#fff; color:#111; }
-    #status { position:fixed; left:12px; right:12px; bottom:16px; z-index:30; color:#fff; background:rgba(0,0,0,0.74); border-radius:14px; padding:10px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; pointer-events:none; max-height:40vh; overflow:auto; }
+    #status { position:fixed; left:12px; right:12px; bottom:16px; z-index:30; color:#fff; background:rgba(0,0,0,0.74); border-radius:14px; padding:10px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; pointer-events:none; }
     #targetGuide { position:fixed; left:50%; top:52%; transform:translate(-50%,-50%); width:70vw; max-width:360px; aspect-ratio:2/3; z-index:25; border:3px dashed rgba(255,255,255,0.82); border-radius:16px; pointer-events:none; display:none; }
     #foundBanner { position:fixed; top:74px; left:50%; transform:translateX(-50%); z-index:35; padding:10px 18px; border-radius:999px; background:rgba(196,0,0,0.94); color:#fff; font-size:15px; font-weight:800; box-shadow:0 4px 14px rgba(0,0,0,0.35); display:none; pointer-events:none; }
-    #debug { position:fixed; right:12px; top:12px; z-index:40; background:rgba(0,0,0,0.6); color:#fff; padding:8px; border-radius:8px; font-size:12px; max-width:36vw; max-height:40vh; overflow:auto; display:none; }
   </style>
 </head>
 <body>
@@ -46,7 +45,6 @@
     <div id="foundBanner">潮見ジオラマを発見！</div>
     <div id="targetGuide"></div>
     <div id="status">初期化中です。</div>
-    <div id="debug" aria-hidden="true"></div>
   </div>
 
   <!-- MindAR + A-Frame シーン（image target） -->
@@ -70,7 +68,6 @@
       <!-- ファイル名 shiomi_city.glb を同じフォルダに置いてください -->
       <a-entity
         id="shiomi"
-        visible="false"
         gltf-model="url(./shiomi_city.glb)"
         position="0 0 0"
         rotation="0 180 0"
@@ -97,38 +94,14 @@
     const statusEl = document.querySelector('#status');
     const targetGuide = document.querySelector('#targetGuide');
     const foundBanner = document.querySelector('#foundBanner');
-    const debugEl = document.querySelector('#debug');
 
     let sceneLoaded = false;
     let modelLoaded = false;
     let arStarted = false;
     let currentScale = 1.0;
-    let initialScale = undefined;
 
     // 自動フィット設定（マーカー上での最大表示サイズ）
-    const TARGET_SIZE_M = 0.09; // 名刺サイズ（約9cm幅）
-
-    // 補間パラメータ
-    const POSITION_LERP = 0.12;
-    const QUAT_SLERP = 0.12;
-
-    // スケール制限
-    const MIN_SCALE = 0.02;
-    const MAX_SCALE = 6.0;
-
-    // three.js 一時変数
-    let THREE, tempBox, tempSize, tempCenter;
-
-    // デバッグ表示
-    function dbg(msg, isErr=false) {
-      console[isErr ? 'error' : 'log']('[dbg] ' + msg);
-      debugEl.style.display = 'block';
-      const d = document.createElement('div');
-      d.textContent = msg;
-      if (isErr) d.style.color = '#ff9a9a';
-      debugEl.appendChild(d);
-      debugEl.scrollTop = debugEl.scrollHeight;
-    }
+    const TARGET_SIZE_M = 0.45; // 机上での最大幅（メートル）。必要に応じて調整。
 
     window.addEventListener('load', () => {
       statusEl.textContent = 'ページを読み込みました。\nARシーンの初期化を待っています。';
@@ -137,11 +110,6 @@
     sceneEl.addEventListener('loaded', () => {
       sceneLoaded = true;
       statusEl.textContent = 'A-Frameシーンを読み込みました。\n確認ボタンで状態確認できます。';
-      THREE = AFRAME.THREE;
-      tempBox = new THREE.Box3();
-      tempSize = new THREE.Vector3();
-      tempCenter = new THREE.Vector3();
-      dbg('A-Frame ready');
     });
 
     // model-loaded イベントで自動フィット処理を行う
@@ -159,7 +127,6 @@
           const obj = modelEl.getObject3D('mesh') || modelEl.getObject3D('scene') || modelEl.getObject3D('gltf');
           if (!obj) {
             console.warn('model-loaded: three object not found yet');
-            dbg('model-loaded: three object not found yet', true);
             return;
           }
 
@@ -171,7 +138,6 @@
           const maxDim = Math.max(size.x, size.y, size.z);
           if (maxDim === 0) {
             console.warn('モデルのサイズが0です');
-            dbg('モデルのサイズが0です', true);
             return;
           }
 
@@ -215,12 +181,8 @@
 
           statusEl.textContent = 'モデル自動フィット完了。表示サイズを調整できます。';
           currentScale = finalScale; // 現在のスケール値を更新（UIの大きく/小さくで使う）
-          initialScale = finalScale;
-          // hide until marker found to avoid flicker
-          modelEl.setAttribute('visible', 'false');
         } catch (e) {
           console.error('auto-fit error', e);
-          dbg('auto-fit error: ' + (e && e.message ? e.message : e), true);
         }
       }, 200);
     });
@@ -229,12 +191,11 @@
       console.error('model-error', e.detail);
       modelLoaded = false;
       statusEl.textContent = 'GLBの読み込みに失敗しました。\nshiomi_city.glb の配置とファイル名を確認してください。';
-      dbg('model-error: ' + JSON.stringify(e.detail || {}), true);
     });
 
     async function waitForMindARSystem() {
       for (let i=0;i<50;i++) {
-        const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
+        const sys = sceneEl.systems['mindar-image-system'];
         if (sys) return sys;
         await new Promise(r => setTimeout(r,200));
       }
@@ -242,7 +203,7 @@
     }
 
     function setScale(value) {
-      currentScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, value));
+      currentScale = Math.max(0.01, Math.min(10.0, value));
       modelEl.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
       statusEl.textContent = 'モデル scale: ' + currentScale.toFixed(2);
     }
@@ -269,60 +230,37 @@
         }
       }
 
-      const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
+      const sys = sceneEl.systems['mindar-image-system'];
       msg += '\nMindARシステム:\n' + (sys ? 'OK: 見つかりました' : 'NG: 見つかりません');
       statusEl.textContent = msg;
-      dbg('check result:\n' + msg);
     });
 
     startBtn.addEventListener('click', async () => {
       try {
         if (!window.isSecureContext) {
           statusEl.textContent = 'HTTPSではありません。\nGitHub Pagesの https:// で始まるURLで開いてください。';
-          dbg('Not secure context', true);
           return;
         }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           statusEl.textContent = 'このブラウザではカメラAPIが使えません。\nAndroid Chrome 等で開いてください。';
-          dbg('getUserMedia not supported', true);
           return;
         }
         if (!sceneLoaded) {
           statusEl.textContent = 'ARシーンの読み込みがまだ完了していません。\n少し待つか、確認ボタンを押してください。';
-          dbg('scene not loaded yet', true);
           return;
         }
 
         const mindar = await waitForMindARSystem();
         if (!mindar) {
           statusEl.textContent = 'MindARシステムが見つかりません。\nCDNやscriptタグを確認してください。';
-          dbg('mindar-image-system not found', true);
-          return;
-        }
-
-        // Probe camera permission to ensure prompt appears
-        statusEl.textContent = 'カメラを起動しています。カメラ許可を許可してください。';
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-          dbg('getUserMedia probe OK');
-          stream.getTracks().forEach(t => t.stop());
-        } catch (e) {
-          dbg('getUserMedia probe failed: ' + (e && e.message ? e.message : e), true);
-          statusEl.textContent = 'カメラ許可が必要です。サイトのカメラ許可を確認してください。';
           return;
         }
 
         targetGuide.style.display = 'block';
+        statusEl.textContent = 'カメラを起動しています。カメラ許可を許可してください。';
 
-        try {
-          await mindar.start();
-          arStarted = true;
-          dbg('mindar.start() succeeded');
-        } catch (startErr) {
-          dbg('mindar.start() failed: ' + (startErr && startErr.message ? startErr.message : startErr), true);
-          statusEl.textContent = 'カメラ開始に失敗しました。\n' + (startErr && startErr.message ? startErr.message : String(startErr));
-          return;
-        }
+        await mindar.start();
+        arStarted = true;
 
         setTimeout(() => {
           const video = document.querySelector('video');
@@ -342,14 +280,13 @@
         statusEl.textContent = '探索中です。\nマーカーを画面中央に入れてください。';
       } catch (err) {
         console.error(err);
-        dbg('startBtn error: ' + (err && err.message ? err.message : err), true);
         statusEl.textContent = 'カメラ開始に失敗しました。\n' + (err.message || String(err));
       }
     });
 
     stopBtn.addEventListener('click', () => {
-      const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
-      if (sys) try { sys.stop(); dbg('mindar.stop() called'); } catch(e) { dbg('mindar.stop error: '+e.message, true); }
+      const sys = sceneEl.systems['mindar-image-system'];
+      if (sys) sys.stop();
       arStarted = false;
       targetGuide.style.display = 'none';
       foundBanner.style.display = 'none';
@@ -360,104 +297,19 @@
       targetGuide.style.display = 'none';
       foundBanner.style.display = 'block';
       statusEl.textContent = modelLoaded ? '潮見ジオラマを発見しました。' : 'マーカー認識済み。GLB読み込みを確認してください。';
-      // show model with slight delay to reduce flicker
-      if (modelLoaded) setTimeout(() => modelEl.setAttribute('visible', 'true'), 80);
       setTimeout(()=>{ foundBanner.style.display='none'; }, 2000);
     });
 
     markerEl.addEventListener('targetLost', () => {
       if (!arStarted) return;
-      modelEl.setAttribute('visible', 'false');
       foundBanner.style.display = 'none';
       targetGuide.style.display = 'block';
       statusEl.textContent = 'マーカーを見失いました。もう一度中央に入れてください。';
     });
 
-    // Stabilizer component to smooth jitter
-    AFRAME.registerComponent('stabilizer', {
-      schema: { target: { type: 'selector' }, lerp: { type: 'number', default: POSITION_LERP }, slerp: { type: 'number', default: QUAT_SLERP } },
-      init: function() {
-        this.targetObj = this.data.target ? this.data.target.object3D : null;
-        this.tempPos = new THREE.Vector3();
-        this.tempQuat = new THREE.Quaternion();
-      },
-      tick: function() {
-        if (!this.targetObj) return;
-        const desiredWorldPos = new THREE.Vector3();
-        const desiredWorldQuat = new THREE.Quaternion();
-        this.targetObj.getWorldPosition(desiredWorldPos);
-        this.targetObj.getWorldQuaternion(desiredWorldQuat);
-
-        const currentWorldPos = new THREE.Vector3();
-        const currentWorldQuat = new THREE.Quaternion();
-        this.el.object3D.getWorldPosition(currentWorldPos);
-        this.el.object3D.getWorldQuaternion(currentWorldQuat);
-
-        currentWorldPos.lerp(desiredWorldPos, this.data.lerp);
-        currentWorldQuat.slerp(desiredWorldQuat, this.data.slerp);
-
-        const parent = this.el.object3D.parent;
-        if (parent) parent.worldToLocal(currentWorldPos);
-
-        this.el.object3D.position.copy(currentWorldPos);
-        this.el.object3D.quaternion.copy(currentWorldQuat);
-      }
-    });
-
-    // attach stabilizer after scene loaded
-    sceneEl.addEventListener('loaded', () => {
-      modelEl.setAttribute('stabilizer', { target: '#markerTarget', lerp: POSITION_LERP, slerp: QUAT_SLERP });
-      dbg('stabilizer attached');
-    });
-
-    // Touch: pinch to scale, double-tap to reset
-    function touchDistance(e) {
-      if (e.touches.length < 2) return 0;
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      return Math.hypot(dx, dy);
-    }
-    let lastTouchDist = null;
-    let lastTap = 0;
-    window.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 2) lastTouchDist = touchDistance(e);
-      else if (e.touches.length === 1) {
-        const now = Date.now();
-        if (now - lastTap < 350) {
-          if (typeof initialScale !== 'undefined') {
-            setScale(initialScale);
-            dbg('doubletap: reset to initialScale');
-          } else {
-            autoFitModel();
-            dbg('doubletap: autoFitModel called');
-          }
-        }
-        lastTap = now;
-      }
-    }, { passive: true });
-
-    window.addEventListener('touchmove', (e) => {
-      if (e.touches.length === 2 && lastTouchDist !== null) {
-        const dist = touchDistance(e);
-        if (dist > 0) {
-          const scaleFactor = dist / lastTouchDist;
-          let newScale = currentScale * scaleFactor;
-          newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-          setScale(newScale);
-          lastTouchDist = dist;
-        }
-        e.preventDefault();
-      }
-    }, { passive: false });
-
-    window.addEventListener('touchend', (e) => {
-      if (e.touches.length < 2) lastTouchDist = null;
-    }, { passive: true });
-
-    // Cleanup on unload
     window.addEventListener('beforeunload', () => {
-      const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
-      if (sys) try { sys.stop(); } catch(e) {}
+      const sys = sceneEl.systems['mindar-image-system'];
+      if (sys) sys.stop();
     });
   </script>
 </body>
