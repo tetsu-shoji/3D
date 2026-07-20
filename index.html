@@ -1,316 +1,141 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
-  <title>潮見ジオラマ AR（テスト）</title>
-
-  <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-  <!-- GLBアニメーション補助（必要なら） -->
-  <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
-
-  <!-- MindAR (image tracking) -->
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-
-  <style>
-    html,body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
-    video { position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; object-fit:cover !important; z-index:0 !important; }
-    canvas.a-canvas { position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; z-index:1 !important; background:transparent !important; }
-    a-scene { position:fixed !important; inset:0 !important; width:100% !important; height:100% !important; z-index:1 !important; background:transparent !important; }
-
-    #ui { position:fixed; inset:0; z-index:20; pointer-events:none; }
-    #topPanel { position:fixed; top:12px; left:12px; right:12px; z-index:30; display:flex; gap:8px; pointer-events:auto; flex-wrap:wrap; }
-    button { border:none; border-radius:999px; padding:10px 14px; font-size:14px; font-weight:700; color:#111; background:rgba(255,255,255,0.94); box-shadow:0 3px 12px rgba(0,0,0,0.3); }
-    button:active { transform:scale(0.97); }
-    #startBtn { background:#c40000; color:#fff; }
-    #stopBtn { background:#333; color:#fff; }
-    #largerBtn,#smallerBtn { background:#fff; color:#111; }
-    #status { position:fixed; left:12px; right:12px; bottom:16px; z-index:30; color:#fff; background:rgba(0,0,0,0.74); border-radius:14px; padding:10px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; pointer-events:none; }
-    #targetGuide { position:fixed; left:50%; top:52%; transform:translate(-50%,-50%); width:70vw; max-width:360px; aspect-ratio:2/3; z-index:25; border:3px dashed rgba(255,255,255,0.82); border-radius:16px; pointer-events:none; display:none; }
-    #foundBanner { position:fixed; top:74px; left:50%; transform:translateX(-50%); z-index:35; padding:10px 18px; border-radius:999px; background:rgba(196,0,0,0.94); color:#fff; font-size:15px; font-weight:800; box-shadow:0 4px 14px rgba(0,0,0,0.35); display:none; pointer-events:none; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Shiomi AR Hit Test</title>
+<style>body{margin:0;overflow:hidden;font-family:system-ui;}#info{position:absolute;left:8px;top:8px;z-index:2;background:rgba(0,0,0,0.5);color:#fff;padding:8px;border-radius:6px;font-size:13px}</style>
 </head>
 <body>
-  <div id="ui">
-    <div id="topPanel">
-      <button id="startBtn">カメラ開始</button>
-      <button id="stopBtn">停止</button>
-      <button id="largerBtn">大きく</button>
-      <button id="smallerBtn">小さく</button>
-      <button id="checkBtn">確認</button>
-    </div>
+<div id="info">画面をタップして机に配置</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.module.js';
+import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.150.0/examples/jsm/webxr/ARButton.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.150.0/examples/jsm/loaders/GLTFLoader.js';
 
-    <div id="foundBanner">潮見ジオラマを発見！</div>
-    <div id="targetGuide"></div>
-    <div id="status">初期化中です。</div>
-  </div>
+let camera, scene, renderer;
+let reticle, controller;
+let model = null;
+let placed = false;
 
-  <!-- MindAR + A-Frame シーン（image target） -->
-  <!-- 注意: imageTargetSrc のファイル名を実際の .mind ファイル名に合わせてください -->
-  <a-scene
-    id="arScene"
-    mindar-image="imageTargetSrc: ./marker.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
-    embedded
-    color-space="sRGB"
-    renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true; preserveDrawingBuffer: true"
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false">
+init();
+async function init(){
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 20);
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
 
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+  document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
 
-    <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
-      <a-light type="ambient" intensity="1.2"></a-light>
-      <a-light type="directional" intensity="1.6" position="0 1 2"></a-light>
+  const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+  scene.add(light);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+  dir.position.set(0.5, 1, 0.5);
+  scene.add(dir);
 
-      <!-- 潮見の glb をここに読み込む -->
-      <!-- ファイル名 shiomi_city.glb を同じフォルダに置いてください -->
-      <a-entity
-        id="shiomi"
-        gltf-model="url(./shiomi_city.glb)"
-        position="0 0 0"
-        rotation="0 180 0"
-        scale="1 1 1"
-        animation-mixer>
-      </a-entity>
+  // レティクル（ヒット位置表示）
+  const ringGeo = new THREE.RingGeometry(0.05, 0.08, 32).rotateX(-Math.PI/2);
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, opacity:0.8, transparent:true });
+  reticle = new THREE.Mesh(ringGeo, ringMat);
+  reticle.matrixAutoUpdate = false;
+  reticle.visible = false;
+  scene.add(reticle);
 
-      <a-text value="潮見ジオラマ" align="center" color="#FFEEAA" position="0 0.75 0.05" scale="0.55 0.55 0.55"></a-text>
-    </a-entity>
-  </a-scene>
+  // コントローラ（タップで配置）
+  controller = renderer.xr.getController(0);
+  controller.addEventListener('select', onSelect);
+  scene.add(controller);
 
-  <script>
-    // 要素参照
-    const sceneEl = document.querySelector('#arScene');
-    const markerEl = document.querySelector('#markerTarget');
-    const modelEl = document.querySelector('#shiomi');
+  // glTF読み込み（非表示で読み込む）
+  const loader = new GLTFLoader();
+  loader.load('shiomi_city.glb', (gltf) => {
+    model = gltf.scene;
+    model.visible = false; // 読み込み完了後に配置時に表示
+    scene.add(model);
+    console.log('model loaded');
+  }, (xhr)=>{}, (err)=>{ console.error(err); });
 
-    const startBtn = document.querySelector('#startBtn');
-    const stopBtn = document.querySelector('#stopBtn');
-    const largerBtn = document.querySelector('#largerBtn');
-    const smallerBtn = document.querySelector('#smallerBtn');
-    const checkBtn = document.querySelector('#checkBtn');
-
-    const statusEl = document.querySelector('#status');
-    const targetGuide = document.querySelector('#targetGuide');
-    const foundBanner = document.querySelector('#foundBanner');
-
-    let sceneLoaded = false;
-    let modelLoaded = false;
-    let arStarted = false;
-    let currentScale = 1.0;
-
-    // 自動フィット設定（マーカー上での最大表示サイズ）
-    const TARGET_SIZE_M = 0.45; // 机上での最大幅（メートル）。必要に応じて調整。
-
-    window.addEventListener('load', () => {
-      statusEl.textContent = 'ページを読み込みました。\nARシーンの初期化を待っています。';
+  // hit-test セッション準備
+  renderer.xr.addEventListener('sessionstart', async () => {
+    const session = renderer.xr.getSession();
+    const viewerRefSpace = await session.requestReferenceSpace('viewer');
+    session.requestHitTestSource({ space: viewerRefSpace }).then((source) => {
+      renderer.xr.hitTestSource = source;
     });
+    // 参照空間（ローカル）
+    renderer.xr.localReferenceSpace = await session.requestReferenceSpace('local');
+  });
 
-    sceneEl.addEventListener('loaded', () => {
-      sceneLoaded = true;
-      statusEl.textContent = 'A-Frameシーンを読み込みました。\n確認ボタンで状態確認できます。';
-    });
-
-    // model-loaded イベントで自動フィット処理を行う
-    modelEl.addEventListener('model-loaded', () => {
-      modelLoaded = true;
-      statusEl.textContent = '潮見GLBを読み込みました。\nカメラ開始後、マーカーにかざしてください。';
-
-      // 少し遅延して three オブジェクトが確実に生成されるのを待つ
-      setTimeout(() => {
-        try {
-          // A-Frame の THREE を参照
-          const THREE = AFRAME.THREE;
-
-          // three.js オブジェクトを取得（gltf は scene に入る）
-          const obj = modelEl.getObject3D('mesh') || modelEl.getObject3D('scene') || modelEl.getObject3D('gltf');
-          if (!obj) {
-            console.warn('model-loaded: three object not found yet');
-            return;
-          }
-
-          // バウンディングボックスを計算
-          const box = new THREE.Box3().setFromObject(obj);
-          const size = new THREE.Vector3();
-          box.getSize(size); // 単位は glTF の単位（通常メートル）
-
-          const maxDim = Math.max(size.x, size.y, size.z);
-          if (maxDim === 0) {
-            console.warn('モデルのサイズが0です');
-            return;
-          }
-
-          // 現在の scale 属性（A-Frame は文字列）
-          const currentScaleAttr = modelEl.getAttribute('scale') || '1 1 1';
-          const currentScaleArr = currentScaleAttr.split(' ').map(Number);
-          const currentUniform = currentScaleArr[0] || 1;
-
-          // 必要なスケール倍率（均一スケール）
-          const requiredUniform = (TARGET_SIZE_M / maxDim) * currentUniform;
-
-          // マージンを少し入れる
-          const margin = 0.95;
-          const finalScale = requiredUniform * margin;
-
-          // 適用
-          modelEl.setAttribute('scale', `${finalScale} ${finalScale} ${finalScale}`);
-
-          // 再計算：底面をY=0に揃えるためのオフセット
-          // box.min はローカル座標（スケール前）なので、スケールを考慮してオフセットを計算
-          const bottomY = box.min.y;
-          const center = new THREE.Vector3();
-          box.getCenter(center);
-
-          const yOffset = -bottomY * finalScale;
-          const xOffset = -center.x * finalScale;
-          const zOffset = -center.z * finalScale;
-
-          // 位置を設定（マーカー原点に対して中央かつ底面が机面に来る）
-          modelEl.setAttribute('position', `${xOffset.toFixed(4)} ${yOffset.toFixed(4)} ${zOffset.toFixed(4)}`);
-
-          // 必要なら回転を微調整（例：向きが逆なら 0 180 0）
-          // modelEl.setAttribute('rotation', '0 180 0');
-
-          console.log('Auto-fit applied:', {
-            size: size,
-            maxDim: maxDim,
-            finalScale: finalScale,
-            position: { x: xOffset, y: yOffset, z: zOffset }
-          });
-
-          statusEl.textContent = 'モデル自動フィット完了。表示サイズを調整できます。';
-          currentScale = finalScale; // 現在のスケール値を更新（UIの大きく/小さくで使う）
-        } catch (e) {
-          console.error('auto-fit error', e);
-        }
-      }, 200);
-    });
-
-    modelEl.addEventListener('model-error', (e) => {
-      console.error('model-error', e.detail);
-      modelLoaded = false;
-      statusEl.textContent = 'GLBの読み込みに失敗しました。\nshiomi_city.glb の配置とファイル名を確認してください。';
-    });
-
-    async function waitForMindARSystem() {
-      for (let i=0;i<50;i++) {
-        const sys = sceneEl.systems['mindar-image-system'];
-        if (sys) return sys;
-        await new Promise(r => setTimeout(r,200));
-      }
-      return null;
+  renderer.xr.addEventListener('sessionend', () => {
+    if (renderer.xr.hitTestSource) {
+      renderer.xr.hitTestSource.cancel();
+      renderer.xr.hitTestSource = null;
     }
+  });
 
-    function setScale(value) {
-      currentScale = Math.max(0.01, Math.min(10.0, value));
-      modelEl.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
-      statusEl.textContent = 'モデル scale: ' + currentScale.toFixed(2);
+  window.addEventListener('resize', onWindowResize);
+  renderer.setAnimationLoop(render);
+}
+
+function onWindowResize(){
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function onSelect(){
+  if (!reticle.visible || !model) return;
+  // 複数回配置したければ clone して配置する
+  const placedModel = model.clone(true);
+  // 自動フィット（簡易）：目標幅を0.4mにする
+  autoFitAndPlace(placedModel, 0.45, reticle.matrix);
+  placedModel.visible = true;
+  scene.add(placedModel);
+  placed = true;
+}
+
+function autoFitAndPlace(obj, targetSizeM, matrix){
+  // バウンディングボックスを計算（注意：objがまだシーンにない場合は一時的に計算）
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const uniform = (maxDim > 0) ? (targetSizeM / maxDim) : 1;
+  obj.scale.setScalar(uniform * 0.95);
+
+  // 底面を0に揃える
+  const box2 = new THREE.Box3().setFromObject(obj);
+  const bottomY = box2.min.y;
+  obj.position.set(0, -bottomY, 0);
+
+  // reticle の行列を適用（ワールド位置へ）
+  obj.applyMatrix4(matrix);
+  // 回転を水平に保つ（reticleは水平）
+  // 必要なら obj.rotateY(Math.PI); で向きを調整
+}
+
+function render(timestamp, frame){
+  if (frame) {
+    const referenceSpace = renderer.xr.localReferenceSpace;
+    const session = renderer.xr.getSession();
+    const hitTestSource = renderer.xr.hitTestSource;
+    if (hitTestSource && referenceSpace) {
+      const hitTestResults = frame.getHitTestResults(hitTestSource);
+      if (hitTestResults.length > 0) {
+        const hit = hitTestResults[0];
+        const pose = hit.getPose(referenceSpace);
+        reticle.visible = true;
+        reticle.matrix.fromArray(pose.transform.matrix);
+      } else {
+        reticle.visible = false;
+      }
     }
+  }
 
-    largerBtn.addEventListener('click', () => setScale(currentScale + 0.25));
-    smallerBtn.addEventListener('click', () => setScale(currentScale - 0.25));
-
-    checkBtn.addEventListener('click', async () => {
-      let msg = '';
-      msg += 'URL:\n' + location.href + '\n\n';
-      msg += 'HTTPS:\n' + (window.isSecureContext ? 'OK\n\n' : 'NG\n\n');
-      msg += 'カメラAPI:\n' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? 'OK\n\n' : 'NG\n\n');
-      msg += 'AFRAME:\n' + (window.AFRAME ? 'OK\n\n' : 'NG\n\n');
-      msg += 'MindARコンポーネント:\n' + ((window.AFRAME && AFRAME.components && AFRAME.components['mindar-image-target']) ? 'OK\n\n' : 'NG\n\n');
-      msg += 'GLB読み込み:\n' + (modelLoaded ? 'OK\n\n' : '未読み込みまたは失敗\n\n');
-
-      const files = ['./marker.mind','./shiomi_city.glb'];
-      for (const f of files) {
-        try {
-          const r = await fetch(f, {cache:'no-store'});
-          msg += f + ' : HTTP ' + r.status + '\n';
-        } catch (e) {
-          msg += f + ' : fetch失敗\n';
-        }
-      }
-
-      const sys = sceneEl.systems['mindar-image-system'];
-      msg += '\nMindARシステム:\n' + (sys ? 'OK: 見つかりました' : 'NG: 見つかりません');
-      statusEl.textContent = msg;
-    });
-
-    startBtn.addEventListener('click', async () => {
-      try {
-        if (!window.isSecureContext) {
-          statusEl.textContent = 'HTTPSではありません。\nGitHub Pagesの https:// で始まるURLで開いてください。';
-          return;
-        }
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          statusEl.textContent = 'このブラウザではカメラAPIが使えません。\nAndroid Chrome 等で開いてください。';
-          return;
-        }
-        if (!sceneLoaded) {
-          statusEl.textContent = 'ARシーンの読み込みがまだ完了していません。\n少し待つか、確認ボタンを押してください。';
-          return;
-        }
-
-        const mindar = await waitForMindARSystem();
-        if (!mindar) {
-          statusEl.textContent = 'MindARシステムが見つかりません。\nCDNやscriptタグを確認してください。';
-          return;
-        }
-
-        targetGuide.style.display = 'block';
-        statusEl.textContent = 'カメラを起動しています。カメラ許可を許可してください。';
-
-        await mindar.start();
-        arStarted = true;
-
-        setTimeout(() => {
-          const video = document.querySelector('video');
-          const canvas = document.querySelector('canvas');
-          if (video) {
-            video.style.position='fixed'; video.style.top='0'; video.style.left='0';
-            video.style.width='100vw'; video.style.height='100vh'; video.style.objectFit='cover';
-            video.style.zIndex='0'; video.style.opacity='1'; video.style.display='block';
-          }
-          if (canvas) {
-            canvas.style.position='fixed'; canvas.style.top='0'; canvas.style.left='0';
-            canvas.style.width='100vw'; canvas.style.height='100vh'; canvas.style.zIndex='1';
-            canvas.style.background='transparent';
-          }
-        }, 500);
-
-        statusEl.textContent = '探索中です。\nマーカーを画面中央に入れてください。';
-      } catch (err) {
-        console.error(err);
-        statusEl.textContent = 'カメラ開始に失敗しました。\n' + (err.message || String(err));
-      }
-    });
-
-    stopBtn.addEventListener('click', () => {
-      const sys = sceneEl.systems['mindar-image-system'];
-      if (sys) sys.stop();
-      arStarted = false;
-      targetGuide.style.display = 'none';
-      foundBanner.style.display = 'none';
-      statusEl.textContent = '停止しました。';
-    });
-
-    markerEl.addEventListener('targetFound', () => {
-      targetGuide.style.display = 'none';
-      foundBanner.style.display = 'block';
-      statusEl.textContent = modelLoaded ? '潮見ジオラマを発見しました。' : 'マーカー認識済み。GLB読み込みを確認してください。';
-      setTimeout(()=>{ foundBanner.style.display='none'; }, 2000);
-    });
-
-    markerEl.addEventListener('targetLost', () => {
-      if (!arStarted) return;
-      foundBanner.style.display = 'none';
-      targetGuide.style.display = 'block';
-      statusEl.textContent = 'マーカーを見失いました。もう一度中央に入れてください。';
-    });
-
-    window.addEventListener('beforeunload', () => {
-      const sys = sceneEl.systems['mindar-image-system'];
-      if (sys) sys.stop();
-    });
-  </script>
+  renderer.render(scene, camera);
+}
+</script>
 </body>
 </html>
