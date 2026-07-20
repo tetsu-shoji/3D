@@ -1,4 +1,9 @@
-// シーン・カメラ・レンダラーの基本セットアップ
+// ESモジュールとして three.js を読み込む
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.module.js';
+import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.150.0/examples/jsm/webxr/ARButton.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.150.0/examples/jsm/loaders/GLTFLoader.js';
+
+// シーン・カメラ・レンダラー
 const scene = new THREE.Scene();
 
 const camera = new THREE.PerspectiveCamera(
@@ -16,15 +21,17 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.xr.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-// ARボタンを追加
-document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+// ARボタンを追加（これが表示されないとAR起動できない）
+document.body.appendChild(
+  ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] })
+);
 
-// 簡単なライト
+// ライト
 const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
 scene.add(light);
 
-// glTFローダーで潮見モデルを読み込み
-const loader = new THREE.GLTFLoader();
+// glTFモデル読み込み
+const loader = new GLTFLoader();
 loader.load(
   'shiomi_city.glb',
   (gltf) => {
@@ -33,7 +40,7 @@ loader.load(
     // スケール調整（必要に応じて変更）
     model.scale.set(0.01, 0.01, 0.01);
 
-    // 少し持ち上げて机の上に置くイメージ
+    // 少し前に配置
     model.position.set(0, 0, -0.3);
 
     scene.add(model);
@@ -46,7 +53,7 @@ loader.load(
   }
 );
 
-// ウィンドウリサイズ対応
+// リサイズ対応
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
