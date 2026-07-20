@@ -1,50 +1,44 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>潮見 AR 高潮デモ</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
+  <title>潮見ジオラマ AR（テスト）</title>
 
   <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-  <!-- GLBアニメーション補助 -->
+  <!-- GLBアニメーション補助（必要なら） -->
   <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
 
   <!-- MindAR (image tracking) -->
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
   <style>
-    html, body {
-      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    video { position: fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; object-fit:cover !important; z-index:0 !important; }
-    canvas.a-canvas { position: fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; z-index:1 !important; background: transparent !important; }
-    a-scene { position: fixed !important; inset: 0 !important; width:100% !important; height:100% !important; z-index:1 !important; background: transparent !important; }
+    html,body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    video { position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; object-fit:cover !important; z-index:0 !important; }
+    canvas.a-canvas { position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; z-index:1 !important; background:transparent !important; }
+    a-scene { position:fixed !important; inset:0 !important; width:100% !important; height:100% !important; z-index:1 !important; background:transparent !important; }
 
-    #ui { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
-    #topPanel { position: fixed; top: 12px; left: 12px; right: 12px; z-index: 30; display:flex; gap:8px; pointer-events:auto; flex-wrap:wrap; }
-    button { border:none; border-radius:999px; padding:10px 14px; font-size:14px; font-weight:700; color:#111; background: rgba(255,255,255,0.94); box-shadow:0 3px 12px rgba(0,0,0,0.3); }
-    button:active { transform: scale(0.97); }
+    #ui { position:fixed; inset:0; z-index:20; pointer-events:none; }
+    #topPanel { position:fixed; top:12px; left:12px; right:12px; z-index:30; display:flex; gap:8px; pointer-events:auto; flex-wrap:wrap; }
+    button { border:none; border-radius:999px; padding:10px 14px; font-size:14px; font-weight:700; color:#111; background:rgba(255,255,255,0.94); box-shadow:0 3px 12px rgba(0,0,0,0.3); }
+    button:active { transform:scale(0.97); }
     #startBtn { background:#c40000; color:#fff; }
     #stopBtn { background:#333; color:#fff; }
-    #floodBtn { background:#0066cc; color:#fff; }
-    #status { position: fixed; left:12px; right:12px; bottom:16px; z-index:30; color:#fff; background: rgba(0,0,0,0.74); border-radius:14px; padding:10px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; pointer-events:none; }
-    #targetGuide { position: fixed; left:50%; top:52%; transform:translate(-50%,-50%); width:70vw; max-width:360px; aspect-ratio:2/3; z-index:25; border:3px dashed rgba(255,255,255,0.82); border-radius:16px; pointer-events:none; display:none; }
-    #foundBanner { position: fixed; top:74px; left:50%; transform:translateX(-50%); z-index:35; padding:10px 18px; border-radius:999px; background: rgba(196,0,0,0.94); color:#fff; font-size:15px; font-weight:800; box-shadow:0 4px 14px rgba(0,0,0,0.35); display:none; pointer-events:none; }
+    #largerBtn,#smallerBtn { background:#fff; color:#111; }
+    #status { position:fixed; left:12px; right:12px; bottom:16px; z-index:30; color:#fff; background:rgba(0,0,0,0.74); border-radius:14px; padding:10px 12px; font-size:13px; line-height:1.5; white-space:pre-wrap; pointer-events:none; }
+    #targetGuide { position:fixed; left:50%; top:52%; transform:translate(-50%,-50%); width:70vw; max-width:360px; aspect-ratio:2/3; z-index:25; border:3px dashed rgba(255,255,255,0.82); border-radius:16px; pointer-events:none; display:none; }
+    #foundBanner { position:fixed; top:74px; left:50%; transform:translateX(-50%); z-index:35; padding:10px 18px; border-radius:999px; background:rgba(196,0,0,0.94); color:#fff; font-size:15px; font-weight:800; box-shadow:0 4px 14px rgba(0,0,0,0.35); display:none; pointer-events:none; }
   </style>
 </head>
-
 <body>
   <div id="ui">
     <div id="topPanel">
       <button id="startBtn">カメラ開始</button>
       <button id="stopBtn">停止</button>
-      <button id="danceBtn">ダンス停止</button>
       <button id="largerBtn">大きく</button>
       <button id="smallerBtn">小さく</button>
-      <button id="floodBtn">高潮開始</button>
       <button id="checkBtn">確認</button>
     </div>
 
@@ -53,10 +47,10 @@
     <div id="status">初期化中です。</div>
   </div>
 
-  <!-- MindAR + A-Frame シーン（image target を使用） -->
+  <!-- MindAR + A-Frame シーン（image target） -->
   <a-scene
     id="arScene"
-    mindar-image="imageTargetSrc: ./yokai_shocho_ofuda_marker.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
+    mindar-image="imageTargetSrc: ./marker.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
     embedded
     color-space="sRGB"
     renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true; preserveDrawingBuffer: true"
@@ -66,14 +60,12 @@
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
     <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
-
-      <!-- 環境光 -->
       <a-light type="ambient" intensity="1.2"></a-light>
       <a-light type="directional" intensity="1.6" position="0 1 2"></a-light>
 
-      <!-- ここに潮見の glb を読み込む（yokai id を流用） -->
+      <!-- 潮見の glb をここに読み込む -->
       <a-entity
-        id="yokai"
+        id="shiomi"
         gltf-model="url(./shiomi_city.glb)"
         position="0 0 0"
         rotation="0 180 0"
@@ -81,262 +73,168 @@
         animation-mixer>
       </a-entity>
 
-      <!-- 半透明の水面（初期は低め） -->
-      <a-plane id="water"
-               position="0 0.02 0"
-               rotation="-90 0 0"
-               width="6"
-               height="6"
-               color="#2ea6ff"
-               opacity="0.45"
-               material="shader: standard; metalness: 0.05; roughness: 0.7">
-      </a-plane>
-
-      <!-- 表示テキスト -->
       <a-text value="潮見ジオラマ" align="center" color="#FFEEAA" position="0 0.75 0.05" scale="0.55 0.55 0.55"></a-text>
-
     </a-entity>
   </a-scene>
 
-  <!-- スクリプト（後半ロジック） -->
   <script>
-    const sceneEl = document.querySelector("#arScene");
-    const targetEl = document.querySelector("#markerTarget");
-    const yokaiEl = document.querySelector("#yokai");
-    const waterEl = document.querySelector("#water");
+    // 要素参照
+    const sceneEl = document.querySelector('#arScene');
+    const markerEl = document.querySelector('#markerTarget');
+    const modelEl = document.querySelector('#shiomi');
 
-    const startBtn = document.querySelector("#startBtn");
-    const stopBtn = document.querySelector("#stopBtn");
-    const danceBtn = document.querySelector("#danceBtn");
-    const largerBtn = document.querySelector("#largerBtn");
-    const smallerBtn = document.querySelector("#smallerBtn");
-    const floodBtn = document.querySelector("#floodBtn");
-    const checkBtn = document.querySelector("#checkBtn");
+    const startBtn = document.querySelector('#startBtn');
+    const stopBtn = document.querySelector('#stopBtn');
+    const largerBtn = document.querySelector('#largerBtn');
+    const smallerBtn = document.querySelector('#smallerBtn');
+    const checkBtn = document.querySelector('#checkBtn');
 
-    const statusEl = document.querySelector("#status");
-    const targetGuide = document.querySelector("#targetGuide");
-    const foundBanner = document.querySelector("#foundBanner");
+    const statusEl = document.querySelector('#status');
+    const targetGuide = document.querySelector('#targetGuide');
+    const foundBanner = document.querySelector('#foundBanner');
 
-    let arStarted = false;
-    let dancePlaying = true;
     let sceneLoaded = false;
     let modelLoaded = false;
+    let arStarted = false;
     let currentScale = 1.0;
 
-    // 水位制御用
-    let floodRunning = false;
-    let floodHeight = 0.02; // 初期Y
-    let floodMax = 0.8;     // 最大上昇Y
-    let floodSpeed = 0.0008; // 上昇速度（調整可）
-    let floodRAF = null;
-
-    window.addEventListener("load", () => {
-      statusEl.textContent =
-        "ページを読み込みました。\nARシーンの初期化を待っています。";
+    window.addEventListener('load', () => {
+      statusEl.textContent = 'ページを読み込みました。\nARシーンの初期化を待っています。';
     });
 
-    sceneEl.addEventListener("loaded", () => {
+    sceneEl.addEventListener('loaded', () => {
       sceneLoaded = true;
-      statusEl.textContent =
-        "A-Frameシーンを読み込みました。\n確認ボタンで状態確認できます。";
+      statusEl.textContent = 'A-Frameシーンを読み込みました。\n確認ボタンで状態確認できます。';
     });
 
-    // glTF 読み込み完了検知
-    yokaiEl.addEventListener("model-loaded", () => {
+    modelEl.addEventListener('model-loaded', () => {
       modelLoaded = true;
-      statusEl.textContent =
-        "潮見GLBを読み込みました。\nカメラ開始後、御札にかざしてください。";
+      statusEl.textContent = '潮見GLBを読み込みました。\nカメラ開始後、マーカーにかざしてください。';
     });
 
-    yokaiEl.addEventListener("model-error", (event) => {
-      console.error("GLB model-error:", event.detail);
+    modelEl.addEventListener('model-error', (e) => {
+      console.error('model-error', e.detail);
       modelLoaded = false;
-      statusEl.textContent =
-        "GLBモデルの読み込みに失敗しました。\nshiomi_city.glb のファイル名と配置を確認してください。";
+      statusEl.textContent = 'GLBの読み込みに失敗しました。\nshiomi_city.glb の配置とファイル名を確認してください。';
     });
 
-    // MindAR system が利用可能になるまで待つユーティリティ
     async function waitForMindARSystem() {
-      for (let i = 0; i < 50; i++) {
-        const system = sceneEl.systems["mindar-image-system"];
-        if (system) return system;
-        await new Promise(resolve => setTimeout(resolve, 200));
+      for (let i=0;i<50;i++) {
+        const sys = sceneEl.systems['mindar-image-system'];
+        if (sys) return sys;
+        await new Promise(r => setTimeout(r,200));
       }
       return null;
     }
 
     function setScale(value) {
       currentScale = Math.max(0.01, Math.min(5.0, value));
-      yokaiEl.setAttribute("scale", `${currentScale} ${currentScale} ${currentScale}`);
-      statusEl.textContent = "モデル scale: " + currentScale.toFixed(2);
+      modelEl.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+      statusEl.textContent = 'モデル scale: ' + currentScale.toFixed(2);
     }
 
-    largerBtn.addEventListener("click", () => setScale(currentScale + 0.25));
-    smallerBtn.addEventListener("click", () => setScale(currentScale - 0.25));
+    largerBtn.addEventListener('click', () => setScale(currentScale + 0.25));
+    smallerBtn.addEventListener('click', () => setScale(currentScale - 0.25));
 
-    // 簡易チェック機能（ファイル・環境確認）
-    async function checkFilesAndSystem() {
-      let message = "";
-      message += "URL:\n" + location.href + "\n\n";
-      message += "HTTPS / Secure Context:\n" + (window.isSecureContext ? "OK\n\n" : "NG\n\n");
-      message += "カメラAPI:\n" + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? "OK\n\n" : "NG\n\n");
-      message += "AFRAME:\n" + (window.AFRAME ? "OK\n\n" : "NG\n\n");
-      message += "MindARコンポーネント登録:\n" + ((window.AFRAME && AFRAME.components && AFRAME.components["mindar-image-target"]) ? "OK: mindar-image-target あり\n\n" : "NG: mindar-image-target なし\n\n");
-      message += "GLB読み込み状態:\n" + (modelLoaded ? "OK: model-loaded 発火済み\n\n" : "未確認または未読み込み\n\n");
-      message += "ファイル確認:\n";
+    checkBtn.addEventListener('click', async () => {
+      let msg = '';
+      msg += 'URL:\n' + location.href + '\n\n';
+      msg += 'HTTPS:\n' + (window.isSecureContext ? 'OK\n\n' : 'NG\n\n');
+      msg += 'カメラAPI:\n' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? 'OK\n\n' : 'NG\n\n');
+      msg += 'AFRAME:\n' + (window.AFRAME ? 'OK\n\n' : 'NG\n\n');
+      msg += 'MindARコンポーネント:\n' + ((window.AFRAME && AFRAME.components && AFRAME.components['mindar-image-target']) ? 'OK\n\n' : 'NG\n\n');
+      msg += 'GLB読み込み:\n' + (modelLoaded ? 'OK\n\n' : '未読み込みまたは失敗\n\n');
 
-      const files = ["./yokai_shocho_ofuda_marker.mind", "./shiomi_city.glb"];
-      for (const file of files) {
+      const files = ['./marker.mind','./shiomi_city.glb'];
+      for (const f of files) {
         try {
-          const res = await fetch(file, { cache: "no-store" });
-          message += file + " : HTTP " + res.status + "\n";
+          const r = await fetch(f, {cache:'no-store'});
+          msg += f + ' : HTTP ' + r.status + '\n';
         } catch (e) {
-          message += file + " : fetch失敗\n";
+          msg += f + ' : fetch失敗\n';
         }
       }
 
-      const system = sceneEl.systems["mindar-image-system"];
-      message += "\nMindARシステム:\n" + (system ? "OK: 見つかりました" : "NG: 見つかりません");
-      statusEl.textContent = message;
-    }
+      const sys = sceneEl.systems['mindar-image-system'];
+      msg += '\nMindARシステム:\n' + (sys ? 'OK: 見つかりました' : 'NG: 見つかりません');
+      statusEl.textContent = msg;
+    });
 
-    checkBtn.addEventListener("click", checkFilesAndSystem);
-
-    // カメラ開始
-    startBtn.addEventListener("click", async () => {
+    startBtn.addEventListener('click', async () => {
       try {
         if (!window.isSecureContext) {
-          statusEl.textContent = "HTTPSではありません。\nGitHub Pagesの https:// で始まるURLを開いてください。";
+          statusEl.textContent = 'HTTPSではありません。\nGitHub Pagesの https:// で始まるURLで開いてください。';
           return;
         }
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          statusEl.textContent = "このブラウザではカメラAPIが使えません。\nAndroid Chrome または対応ブラウザで開いてください。";
+          statusEl.textContent = 'このブラウザではカメラAPIが使えません。\nAndroid Chrome 等で開いてください。';
           return;
         }
         if (!sceneLoaded) {
-          statusEl.textContent = "ARシーンの読み込みがまだ完了していません。\n少し待つか、確認ボタンを押してください。";
+          statusEl.textContent = 'ARシーンの読み込みがまだ完了していません。\n少し待つか、確認ボタンを押してください。';
           return;
         }
 
-        const mindarSystem = await waitForMindARSystem();
-        if (!mindarSystem) {
-          statusEl.textContent = "MindARシステムが見つかりません。\nscriptタグ、CDN、GitHub Pages URLを確認してください。";
+        const mindar = await waitForMindARSystem();
+        if (!mindar) {
+          statusEl.textContent = 'MindARシステムが見つかりません。\nCDNやscriptタグを確認してください。';
           return;
         }
 
-        targetGuide.style.display = "block";
-        statusEl.textContent = "カメラを起動しています。\nカメラ許可が表示されたら許可を押してください。";
+        targetGuide.style.display = 'block';
+        statusEl.textContent = 'カメラを起動しています。カメラ許可を許可してください。';
 
-        await mindarSystem.start();
+        await mindar.start();
         arStarted = true;
 
-        // video/canvas のスタイル調整（見た目）
         setTimeout(() => {
-          const video = document.querySelector("video");
-          const canvas = document.querySelector("canvas");
+          const video = document.querySelector('video');
+          const canvas = document.querySelector('canvas');
           if (video) {
-            video.style.position = "fixed"; video.style.top = "0"; video.style.left = "0";
-            video.style.width = "100vw"; video.style.height = "100vh"; video.style.objectFit = "cover";
-            video.style.zIndex = "0"; video.style.opacity = "1"; video.style.display = "block";
+            video.style.position='fixed'; video.style.top='0'; video.style.left='0';
+            video.style.width='100vw'; video.style.height='100vh'; video.style.objectFit='cover';
+            video.style.zIndex='0'; video.style.opacity='1'; video.style.display='block';
           }
           if (canvas) {
-            canvas.style.position = "fixed"; canvas.style.top = "0"; canvas.style.left = "0";
-            canvas.style.width = "100vw"; canvas.style.height = "100vh"; canvas.style.zIndex = "1";
-            canvas.style.background = "transparent";
+            canvas.style.position='fixed'; canvas.style.top='0'; canvas.style.left='0';
+            canvas.style.width='100vw'; canvas.style.height='100vh'; canvas.style.zIndex='1';
+            canvas.style.background='transparent';
           }
         }, 500);
 
-        statusEl.textContent = "探索中です。\n御札マーカーを画面中央に入れてください。";
-      } catch (error) {
-        console.error(error);
-        statusEl.textContent = "カメラ開始に失敗しました。\n" + (error.message || String(error));
+        statusEl.textContent = '探索中です。\nマーカーを画面中央に入れてください。';
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'カメラ開始に失敗しました。\n' + (err.message || String(err));
       }
     });
 
-    // 停止
-    stopBtn.addEventListener("click", () => {
-      const system = sceneEl.systems["mindar-image-system"];
-      if (system) system.stop();
+    stopBtn.addEventListener('click', () => {
+      const sys = sceneEl.systems['mindar-image-system'];
+      if (sys) sys.stop();
       arStarted = false;
-      targetGuide.style.display = "none";
-      foundBanner.style.display = "none";
-      statusEl.textContent = "停止しました。";
-      stopFlood();
+      targetGuide.style.display = 'none';
+      foundBanner.style.display = 'none';
+      statusEl.textContent = '停止しました。';
     });
 
-    // ダンス（モデルの animation-mixer をトグル）
-    danceBtn.addEventListener("click", () => {
-      if (dancePlaying) {
-        yokaiEl.removeAttribute("animation-mixer");
-        dancePlaying = false;
-        danceBtn.textContent = "ダンス再生";
-        statusEl.textContent = "アニメーションを停止しました。";
-      } else {
-        yokaiEl.setAttribute("animation-mixer", "clip: Dance; loop: repeat; timeScale: 1");
-        dancePlaying = true;
-        danceBtn.textContent = "ダンス停止";
-        statusEl.textContent = "アニメーションを再生しました。";
-      }
+    markerEl.addEventListener('targetFound', () => {
+      targetGuide.style.display = 'none';
+      foundBanner.style.display = 'block';
+      statusEl.textContent = modelLoaded ? '潮見ジオラマを発見しました。' : 'マーカー認識済み。GLB読み込みを確認してください。';
+      setTimeout(()=>{ foundBanner.style.display='none'; }, 2000);
     });
 
-    // マーカー検出イベント
-    targetEl.addEventListener("targetFound", () => {
-      targetGuide.style.display = "none";
-      foundBanner.style.display = "block";
-      if (modelLoaded) {
-        statusEl.textContent = "潮見ジオラマを発見しました。";
-      } else {
-        statusEl.textContent = "マーカーは認識しましたが、GLBモデルがまだ読み込めていません。確認ボタンを押してください。";
-      }
-      setTimeout(() => { foundBanner.style.display = "none"; }, 2500);
-    });
-
-    targetEl.addEventListener("targetLost", () => {
+    markerEl.addEventListener('targetLost', () => {
       if (!arStarted) return;
-      foundBanner.style.display = "none";
-      targetGuide.style.display = "block";
-      statusEl.textContent = "マーカーを見失いました。\nもう一度、御札を画面中央に入れてください。";
+      foundBanner.style.display = 'none';
+      targetGuide.style.display = 'block';
+      statusEl.textContent = 'マーカーを見失いました。もう一度中央に入れてください。';
     });
 
-    // 水位アニメーション（requestAnimationFrameで滑らかに）
-    function floodStep() {
-      if (!floodRunning) return;
-      floodHeight += floodSpeed;
-      if (floodHeight >= floodMax) {
-        floodHeight = floodMax;
-        // 自動停止するならここで stopFlood();
-      }
-      // water の position を更新（Y）
-      waterEl.setAttribute('position', `0 ${floodHeight} 0`);
-      floodRAF = requestAnimationFrame(floodStep);
-    }
-
-    function startFlood() {
-      if (floodRunning) return;
-      floodRunning = true;
-      floodBtn.textContent = "高潮停止";
-      statusEl.textContent = "高潮シミュレーション開始";
-      floodRAF = requestAnimationFrame(floodStep);
-    }
-
-    function stopFlood() {
-      if (!floodRunning) return;
-      floodRunning = false;
-      floodBtn.textContent = "高潮開始";
-      statusEl.textContent = "高潮シミュレーション停止";
-      if (floodRAF) cancelAnimationFrame(floodRAF);
-    }
-
-    // ボタンで高潮トグル
-    floodBtn.addEventListener("click", () => {
-      if (floodRunning) stopFlood(); else startFlood();
-    });
-
-    // ページ離脱時のクリーンアップ
     window.addEventListener('beforeunload', () => {
-      const system = sceneEl.systems["mindar-image-system"];
-      if (system) system.stop();
-      stopFlood();
+      const sys = sceneEl.systems['mindar-image-system'];
+      if (sys) sys.stop();
     });
   </script>
 </body>
