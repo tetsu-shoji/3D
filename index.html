@@ -48,6 +48,7 @@
   </div>
 
   <!-- MindAR + A-Frame シーン（image target） -->
+  <!-- 注意: imageTargetSrc のファイル名を実際の .mind ファイル名に合わせてください -->
   <a-scene
     id="arScene"
     mindar-image="imageTargetSrc: ./marker.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
@@ -64,12 +65,13 @@
       <a-light type="directional" intensity="1.6" position="0 1 2"></a-light>
 
       <!-- 潮見の glb をここに読み込む -->
+      <!-- ファイル名 shiomi_city.glb を同じフォルダに置いてください -->
       <a-entity
         id="shiomi"
         gltf-model="url(./shiomi_city.glb)"
         position="0 0 0"
         rotation="0 180 0"
-        scale="0.02 0.02 0.02"
+        scale="1 1 1"
         animation-mixer>
       </a-entity>
 
@@ -98,6 +100,9 @@
     let arStarted = false;
     let currentScale = 1.0;
 
+    // 自動フィット設定（マーカー上での最大表示サイズ）
+    const TARGET_SIZE_M = 0.45; // 机上での最大幅（メートル）。必要に応じて調整。
+
     window.addEventListener('load', () => {
       statusEl.textContent = 'ページを読み込みました。\nARシーンの初期化を待っています。';
     });
@@ -107,9 +112,79 @@
       statusEl.textContent = 'A-Frameシーンを読み込みました。\n確認ボタンで状態確認できます。';
     });
 
+    // model-loaded イベントで自動フィット処理を行う
     modelEl.addEventListener('model-loaded', () => {
       modelLoaded = true;
       statusEl.textContent = '潮見GLBを読み込みました。\nカメラ開始後、マーカーにかざしてください。';
+
+      // 少し遅延して three オブジェクトが確実に生成されるのを待つ
+      setTimeout(() => {
+        try {
+          // A-Frame の THREE を参照
+          const THREE = AFRAME.THREE;
+
+          // three.js オブジェクトを取得（gltf は scene に入る）
+          const obj = modelEl.getObject3D('mesh') || modelEl.getObject3D('scene') || modelEl.getObject3D('gltf');
+          if (!obj) {
+            console.warn('model-loaded: three object not found yet');
+            return;
+          }
+
+          // バウンディングボックスを計算
+          const box = new THREE.Box3().setFromObject(obj);
+          const size = new THREE.Vector3();
+          box.getSize(size); // 単位は glTF の単位（通常メートル）
+
+          const maxDim = Math.max(size.x, size.y, size.z);
+          if (maxDim === 0) {
+            console.warn('モデルのサイズが0です');
+            return;
+          }
+
+          // 現在の scale 属性（A-Frame は文字列）
+          const currentScaleAttr = modelEl.getAttribute('scale') || '1 1 1';
+          const currentScaleArr = currentScaleAttr.split(' ').map(Number);
+          const currentUniform = currentScaleArr[0] || 1;
+
+          // 必要なスケール倍率（均一スケール）
+          const requiredUniform = (TARGET_SIZE_M / maxDim) * currentUniform;
+
+          // マージンを少し入れる
+          const margin = 0.95;
+          const finalScale = requiredUniform * margin;
+
+          // 適用
+          modelEl.setAttribute('scale', `${finalScale} ${finalScale} ${finalScale}`);
+
+          // 再計算：底面をY=0に揃えるためのオフセット
+          // box.min はローカル座標（スケール前）なので、スケールを考慮してオフセットを計算
+          const bottomY = box.min.y;
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+
+          const yOffset = -bottomY * finalScale;
+          const xOffset = -center.x * finalScale;
+          const zOffset = -center.z * finalScale;
+
+          // 位置を設定（マーカー原点に対して中央かつ底面が机面に来る）
+          modelEl.setAttribute('position', `${xOffset.toFixed(4)} ${yOffset.toFixed(4)} ${zOffset.toFixed(4)}`);
+
+          // 必要なら回転を微調整（例：向きが逆なら 0 180 0）
+          // modelEl.setAttribute('rotation', '0 180 0');
+
+          console.log('Auto-fit applied:', {
+            size: size,
+            maxDim: maxDim,
+            finalScale: finalScale,
+            position: { x: xOffset, y: yOffset, z: zOffset }
+          });
+
+          statusEl.textContent = 'モデル自動フィット完了。表示サイズを調整できます。';
+          currentScale = finalScale; // 現在のスケール値を更新（UIの大きく/小さくで使う）
+        } catch (e) {
+          console.error('auto-fit error', e);
+        }
+      }, 200);
     });
 
     modelEl.addEventListener('model-error', (e) => {
@@ -128,7 +203,7 @@
     }
 
     function setScale(value) {
-      currentScale = Math.max(0.01, Math.min(5.0, value));
+      currentScale = Math.max(0.01, Math.min(10.0, value));
       modelEl.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
       statusEl.textContent = 'モデル scale: ' + currentScale.toFixed(2);
     }
