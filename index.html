@@ -1,32 +1,32 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
-  <title>潮見ジオラマ AR（名刺サイズ・安定表示）</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>潮見ジオラマ AR（名刺サイズ・安定表示）</title>
 
-  <!-- A-Frame -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
+<!-- A-Frame -->
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
 
-  <!-- MindAR (image tracking) -->
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+<!-- MindAR -->
+<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
-  <style>
-    html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    video{position:fixed !important;top:0 !important;left:0 !important;width:100vw !important;height:100vh !important;object-fit:cover !important;z-index:0 !important}
-    canvas.a-canvas{position:fixed !important;top:0 !important;left:0 !important;width:100vw !important;height:100vh !important;z-index:1 !important;background:transparent !important}
-    a-scene{position:fixed !important;inset:0 !important;width:100% !important;height:100% !important;z-index:1 !important;background:transparent !important}
+<style>
+  html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui}
+  video{position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; object-fit:cover !important; z-index:0 !important}
+  canvas.a-canvas{position:fixed !important; top:0 !important; left:0 !important; width:100vw !important; height:100vh !important; z-index:1 !important; background:transparent !important}
+  a-scene{position:fixed !important; inset:0 !important; width:100% !important; height:100% !important; z-index:1 !important; background:transparent !important}
 
-    #ui{position:fixed;inset:0;z-index:30;pointer-events:none}
-    #topPanel{position:fixed;top:12px;left:12px;right:12px;z-index:40;display:flex;gap:8px;pointer-events:auto;flex-wrap:wrap}
-    button{border:none;border-radius:999px;padding:10px 14px;font-size:14px;font-weight:700;color:#111;background:#fff}
-    #startBtn{background:#0b84ff;color:#fff}
-    #stopBtn{background:#333;color:#fff}
-    #status{position:fixed;left:12px;right:12px;bottom:16px;z-index:40;background:rgba(0,0,0,0.7);padding:10px;border-radius:12px;font-size:13px;line-height:1.4;white-space:pre-wrap;pointer-events:none;max-height:40vh;overflow:auto}
-    #foundBanner{position:fixed;top:74px;left:50%;transform:translateX(-50%);z-index:45;padding:10px 18px;border-radius:999px;background:#c40000;color:#fff;font-weight:800;display:none}
-    #debug{position:fixed;right:12px;top:12px;z-index:50;background:rgba(0,0,0,0.6);color:#fff;padding:8px;border-radius:8px;font-size:12px;max-width:36vw;max-height:40vh;overflow:auto;display:none}
-  </style>
+  #ui{position:fixed; inset:0; z-index:30; pointer-events:none}
+  #topPanel{position:fixed; top:12px; left:12px; right:12px; z-index:40; display:flex; gap:8px; pointer-events:auto; flex-wrap:wrap}
+  button{border:none;border-radius:999px;padding:10px 14px;font-size:14px;font-weight:700;color:#111;background:#fff}
+  #startBtn{background:#0b84ff;color:#fff}
+  #stopBtn{background:#333;color:#fff}
+  #status{position:fixed; left:12px; right:12px; bottom:16px; z-index:40; background:rgba(0,0,0,0.72); padding:10px; border-radius:12px; font-size:13px; line-height:1.4; white-space:pre-wrap; pointer-events:none; max-height:40vh; overflow:auto}
+  #foundBanner{position:fixed; top:74px; left:50%; transform:translateX(-50%); z-index:45; padding:10px 18px; border-radius:999px; background:#c40000; color:#fff; font-weight:800; display:none}
+  #debug{position:fixed; right:12px; top:12px; z-index:50; background:rgba(0,0,0,0.6); color:#fff; padding:8px; border-radius:8px; font-size:12px; max-width:36vw; max-height:40vh; overflow:auto; display:none}
+</style>
 </head>
 <body>
   <div id="ui">
@@ -45,385 +45,402 @@
     <div id="debug" aria-hidden="true"></div>
   </div>
 
-  <!-- MindAR + A-Frame シーン -->
-  <!-- marker.mind と shiomi_city.glb を同じフォルダに置いてください -->
+  <!-- MindAR scene: imageTargetSrc を marker.mind に合わせる -->
   <a-scene id="arScene"
            mindar-image="imageTargetSrc: ./marker.mind; autoStart: false; uiLoading: no; uiScanning: no; uiError: no;"
            embedded
            color-space="sRGB"
-           renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true; alpha: true; preserveDrawingBuffer: true"
-           vr-mode-ui="enabled: false"
-           device-orientation-permission-ui="enabled: false">
+           renderer="antialias:true;alpha:true;preserveDrawingBuffer:true"
+           vr-mode-ui="enabled:false"
+           device-orientation-permission-ui="enabled:false">
 
-    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <a-camera position="0 0 0" look-controls="enabled:false"></a-camera>
 
     <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
       <a-light type="ambient" intensity="1.0"></a-light>
       <a-light type="directional" intensity="1.2" position="0 1 1"></a-light>
 
-      <!-- 非表示で読み込み。自動フィット後、検出で visible=true -->
+      <!-- GLB: shiomi_city.glb を同フォルダに配置 -->
       <a-entity id="shiomi" visible="false" gltf-model="url(./shiomi_city.glb)" position="0 0 0" rotation="0 180 0" scale="1 1 1" animation-mixer></a-entity>
     </a-entity>
   </a-scene>
 
-  <script>
-    // Elements
-    const sceneEl = document.querySelector('#arScene');
-    const markerEl = document.querySelector('#markerTarget');
-    const modelEl = document.querySelector('#shiomi');
+<script>
+  // Elements
+  const sceneEl = document.querySelector('#arScene');
+  const markerEl = document.querySelector('#markerTarget');
+  const modelEl = document.querySelector('#shiomi');
 
-    const checkBtn = document.querySelector('#checkBtn');
-    const startBtn = document.querySelector('#startBtn');
-    const stopBtn = document.querySelector('#stopBtn');
-    const largerBtn = document.querySelector('#largerBtn');
-    const smallerBtn = document.querySelector('#smallerBtn');
-    const rotLBtn = document.querySelector('#rotLBtn');
-    const rotRBtn = document.querySelector('#rotRBtn');
+  const checkBtn = document.querySelector('#checkBtn');
+  const startBtn = document.querySelector('#startBtn');
+  const stopBtn = document.querySelector('#stopBtn');
+  const largerBtn = document.querySelector('#largerBtn');
+  const smallerBtn = document.querySelector('#smallerBtn');
+  const rotLBtn = document.querySelector('#rotLBtn');
+  const rotRBtn = document.querySelector('#rotRBtn');
 
-    const statusEl = document.querySelector('#status');
-    const foundBanner = document.querySelector('#foundBanner');
-    const debugEl = document.querySelector('#debug');
+  const statusEl = document.querySelector('#status');
+  const foundBanner = document.querySelector('#foundBanner');
+  const debugEl = document.querySelector('#debug');
 
-    // State & settings
-    let sceneLoaded = false;
-    let modelLoaded = false;
-    let arStarted = false;
-    let currentScale = 1.0;
-    let currentYRotation = 0;
-    let initialScale = undefined;
+  // State & settings
+  let sceneLoaded = false;
+  let modelLoaded = false;
+  let arStarted = false;
+  let currentScale = 1.0;
+  let currentYRotation = 0;
+  let initialScale = undefined;
 
-    const TARGET_SIZE_M = 0.09; // 名刺幅 9cm
-    const POSITION_LERP = 0.12;
-    const QUAT_SLERP = 0.12;
-    const MIN_SCALE = 0.02;
-    const MAX_SCALE = 6.0;
+  const TARGET_SIZE_M = 0.09; // 名刺幅 9cm
+  const POSITION_LERP = 0.12;
+  const QUAT_SLERP = 0.12;
+  const MIN_SCALE = 0.02;
+  const MAX_SCALE = 6.0;
 
-    // three.js temps
-    let THREE, tempBox, tempSize, tempCenter;
+  // three.js temps
+  let THREE, tempBox, tempSize, tempCenter;
 
-    // Debug helper
-    function dbg(msg, err=false){
-      console[err ? 'error' : 'log']('[dbg] ' + msg);
-      debugEl.style.display = 'block';
-      const d = document.createElement('div');
-      d.textContent = msg;
-      if(err) d.style.color = '#ff9a9a';
-      debugEl.appendChild(d);
-      debugEl.scrollTop = debugEl.scrollHeight;
+  // debug helper
+  function dbg(msg, isErr=false){
+    console[isErr ? 'error' : 'log']('[dbg] ' + msg);
+    debugEl.style.display = 'block';
+    const d = document.createElement('div');
+    d.textContent = msg;
+    if(isErr) d.style.color = '#ff9a9a';
+    debugEl.appendChild(d);
+    debugEl.scrollTop = debugEl.scrollHeight;
+  }
+
+  // Scene loaded
+  sceneEl.addEventListener('loaded', () => {
+    sceneLoaded = true;
+    statusEl.textContent = 'A-Frame 読み込み完了。確認を押してください。';
+    THREE = AFRAME.THREE;
+    tempBox = new THREE.Box3();
+    tempSize = new THREE.Vector3();
+    tempCenter = new THREE.Vector3();
+    dbg('A-Frame ready');
+  });
+
+  // Preflight: HEAD check + camera probe
+  async function preflightCheck(){
+    statusEl.textContent = '事前チェック中...';
+    const files = ['./marker.mind','./shiomi_city.glb'];
+    let out = '';
+    for(const f of files){
+      try{
+        const r = await fetch(f, { method:'HEAD', cache:'no-store' });
+        out += `${f} : HTTP ${r.status}\n`;
+        dbg(`${f} HEAD ${r.status}`);
+      } catch(e){
+        out += `${f} : fetch失敗 (${e.message})\n`;
+        dbg(`${f} HEAD fetch failed: ${e.message}`, true);
+      }
     }
 
-    // Scene loaded
-    sceneEl.addEventListener('loaded', () => {
-      sceneLoaded = true;
-      statusEl.textContent = 'A-Frame 読み込み完了。確認を押してください。';
-      THREE = AFRAME.THREE;
-      tempBox = new THREE.Box3();
-      tempSize = new THREE.Vector3();
-      tempCenter = new THREE.Vector3();
-      dbg('A-Frame ready');
-    });
-
-    // Preflight check: HEAD for files and quick camera probe
-    async function preflightCheck(){
-      statusEl.textContent = '事前チェック中...';
-      const files = ['./marker.mind','./shiomi_city.glb'];
-      let out = '';
-      for(const f of files){
-        try{
-          const r = await fetch(f, { method:'HEAD', cache:'no-store' });
-          out += `${f} : HTTP ${r.status}\n`;
-          dbg(`${f} HEAD ${r.status}`);
-        } catch(e){
-          out += `${f} : fetch失敗 (${e.message})\n`;
-          dbg(`${f} HEAD fetch failed: ${e.message}`, true);
-        }
+    // camera probe to ensure permission prompt
+    if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+      try{
+        const s = await navigator.mediaDevices.getUserMedia({ video:true });
+        out += 'カメラ取得テスト: OK\n';
+        dbg('getUserMedia probe OK');
+        s.getTracks().forEach(t=>t.stop());
+      } catch(e){
+        out += 'カメラ取得テスト: 失敗 - ' + (e && e.message ? e.message : e) + '\n';
+        dbg('getUserMedia probe failed: ' + (e && e.message ? e.message : e), true);
       }
-      // quick camera probe (permission prompt)
-      if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
-        try{
-          const s = await navigator.mediaDevices.getUserMedia({ video:true });
-          out += 'カメラ取得テスト: OK\n';
-          dbg('getUserMedia probe OK');
-          s.getTracks().forEach(t=>t.stop());
-        } catch(e){
-          out += 'カメラ取得テスト: 失敗 - ' + (e && e.message ? e.message : e) + '\n';
-          dbg('getUserMedia probe failed: ' + (e && e.message ? e.message : e), true);
-        }
-      } else {
-        out += 'カメラAPI: 非対応\n';
+    } else {
+      out += 'カメラAPI: 非対応\n';
+      dbg('getUserMedia not supported', true);
+    }
+
+    statusEl.textContent = out;
+    // enable start only if scene loaded and HEAD 200 present
+    const ok = out.includes('HTTP 200') && sceneLoaded;
+    startBtn.disabled = !ok;
+    if(ok) statusEl.textContent += '\n準備完了: カメラ開始を押してください。';
+    return out;
+  }
+
+  checkBtn.addEventListener('click', preflightCheck);
+
+  // Auto-fit model to TARGET_SIZE_M and align bottom to Y=0
+  function autoFitModel(){
+    try{
+      const obj = modelEl.getObject3D('mesh') || modelEl.getObject3D('scene') || modelEl.getObject3D('gltf');
+      if(!obj){
+        dbg('autoFit: three object not found', true);
+        statusEl.textContent = 'autoFit: three object not found';
+        return;
+      }
+      tempBox.setFromObject(obj);
+      tempBox.getSize(tempSize);
+      tempBox.getCenter(tempCenter);
+      const maxDim = Math.max(tempSize.x, tempSize.y, tempSize.z);
+      if(maxDim === 0){
+        dbg('autoFit: model maxDim is 0', true);
+        statusEl.textContent = 'autoFit: model maxDim is 0';
+        return;
+      }
+      const curScaleAttr = modelEl.getAttribute('scale') || '1 1 1';
+      const curScaleArr = curScaleAttr.split(' ').map(Number);
+      const curUniform = curScaleArr[0] || 1;
+      const requiredUniform = (TARGET_SIZE_M / maxDim) * curUniform;
+      const margin = 0.95;
+      const finalScale = requiredUniform * margin;
+      modelEl.setAttribute('scale', `${finalScale} ${finalScale} ${finalScale}`);
+      currentScale = finalScale;
+      const bottomY = tempBox.min.y;
+      const yOffset = -bottomY * finalScale;
+      const xOffset = -tempCenter.x * finalScale;
+      const zOffset = -tempCenter.z * finalScale;
+      modelEl.setAttribute('position', `${xOffset.toFixed(4)} ${yOffset.toFixed(4)} ${zOffset.toFixed(4)}`);
+      const rot = modelEl.getAttribute('rotation') || { x:0, y:180, z:0 };
+      modelEl.setAttribute('rotation', `0 ${rot.y} 0`);
+      initialScale = currentScale;
+      statusEl.textContent = 'モデル自動フィット完了（名刺サイズ）。';
+      dbg('autoFit applied finalScale=' + finalScale.toFixed(4));
+    } catch(e){
+      dbg('autoFit error: ' + (e && e.message ? e.message : e), true);
+      statusEl.textContent = '自動フィットでエラーが発生しました。';
+    }
+  }
+
+  // Model load handlers
+  modelEl.addEventListener('model-loaded', () => {
+    modelLoaded = true;
+    dbg('model-loaded event');
+    setTimeout(autoFitModel, 150);
+  });
+  modelEl.addEventListener('model-error', (e) => {
+    modelLoaded = false;
+    dbg('model-error: ' + JSON.stringify(e.detail || {}), true);
+    statusEl.textContent = 'GLBの読み込みに失敗しました。ファイル名・パスを確認してください。';
+  });
+
+  // Controls
+  function setScale(value){
+    currentScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, value));
+    modelEl.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
+    statusEl.textContent = 'モデル scale: ' + currentScale.toFixed(2);
+  }
+  largerBtn.addEventListener('click', () => setScale(currentScale + 0.05));
+  smallerBtn.addEventListener('click', () => setScale(currentScale - 0.05));
+  function rotateY(deltaDeg){
+    currentYRotation = (currentYRotation + deltaDeg) % 360;
+    modelEl.setAttribute('rotation', `0 ${currentYRotation} 0`);
+    statusEl.textContent = 'モデル rotationY: ' + currentYRotation.toFixed(0) + '°';
+  }
+  rotLBtn.addEventListener('click', () => rotateY(-10));
+  rotRBtn.addEventListener('click', () => rotateY(10));
+
+  // Wait for MindAR system
+  async function waitForMindARSystem(){
+    for(let i=0;i<60;i++){
+      const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
+      if(sys) return sys;
+      await new Promise(r=>setTimeout(r,200));
+    }
+    return null;
+  }
+
+  // Start: probe getUserMedia first to ensure permission prompt, then mindar.start()
+  startBtn.addEventListener('click', async () => {
+    try{
+      if(!window.isSecureContext){
+        statusEl.textContent = 'HTTPSが必要です。GitHub Pagesで公開してください。';
+        dbg('Not secure context', true);
+        return;
+      }
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        statusEl.textContent = 'カメラAPIが利用できません。対応ブラウザで開いてください。';
         dbg('getUserMedia not supported', true);
+        return;
       }
-      statusEl.textContent = out;
-      // enable start only if scene loaded and files likely present (HEAD 200)
-      const ok = out.includes('HTTP 200') && sceneLoaded;
-      startBtn.disabled = !ok;
-      if(ok) statusEl.textContent += '\n準備完了: カメラ開始ボタンを押してください。';
-      return out;
-    }
+      if(!sceneLoaded){
+        statusEl.textContent = 'シーンがまだ読み込まれていません。少し待ってください。';
+        dbg('scene not loaded yet', true);
+        return;
+      }
 
-    checkBtn.addEventListener('click', preflightCheck);
+      const mindar = await waitForMindARSystem();
+      if(!mindar){
+        statusEl.textContent = 'MindARシステムが見つかりません。スクリプトの読み込みを確認してください。';
+        dbg('mindar-image-system not found', true);
+        return;
+      }
 
-    // Auto-fit model to TARGET_SIZE_M and align bottom to Y=0
-    function autoFitModel(){
+      // Probe camera permission
+      statusEl.textContent = 'カメラ許可を確認しています。許可ダイアログが出たら許可してください。';
       try{
-        const obj = modelEl.getObject3D('mesh') || modelEl.getObject3D('scene') || modelEl.getObject3D('gltf');
-        if(!obj){
-          dbg('autoFit: three object not found', true);
-          statusEl.textContent = 'autoFit: three object not found';
-          return;
-        }
-        tempBox.setFromObject(obj);
-        tempBox.getSize(tempSize);
-        tempBox.getCenter(tempCenter);
-        const maxDim = Math.max(tempSize.x, tempSize.y, tempSize.z);
-        if(maxDim === 0){
-          dbg('autoFit: model maxDim is 0', true);
-          statusEl.textContent = 'autoFit: model maxDim is 0';
-          return;
-        }
-        const curScaleAttr = modelEl.getAttribute('scale') || '1 1 1';
-        const curScaleArr = curScaleAttr.split(' ').map(Number);
-        const curUniform = curScaleArr[0] || 1;
-        const requiredUniform = (TARGET_SIZE_M / maxDim) * curUniform;
-        const margin = 0.95;
-        const finalScale = requiredUniform * margin;
-        modelEl.setAttribute('scale', `${finalScale} ${finalScale} ${finalScale}`);
-        currentScale = finalScale;
-        const bottomY = tempBox.min.y;
-        const yOffset = -bottomY * finalScale;
-        const xOffset = -tempCenter.x * finalScale;
-        const zOffset = -tempCenter.z * finalScale;
-        modelEl.setAttribute('position', `${xOffset.toFixed(4)} ${yOffset.toFixed(4)} ${zOffset.toFixed(4)}`);
-        const rot = modelEl.getAttribute('rotation') || { x:0, y:180, z:0 };
-        modelEl.setAttribute('rotation', `0 ${rot.y} 0`);
-        initialScale = currentScale;
-        statusEl.textContent = 'モデル自動フィット完了（名刺サイズ）。';
-        dbg('autoFit applied finalScale=' + finalScale.toFixed(4));
+        const s = await navigator.mediaDevices.getUserMedia({ video:true });
+        dbg('getUserMedia probe OK');
+        s.getTracks().forEach(t=>t.stop());
       } catch(e){
-        dbg('autoFit error: ' + (e && e.message ? e.message : e), true);
-        statusEl.textContent = '自動フィットでエラーが発生しました。';
+        dbg('getUserMedia probe failed: ' + (e && e.message ? e.message : e), true);
+        statusEl.textContent = 'カメラ許可が必要です。サイトのカメラ許可を確認してください。';
+        return;
       }
-    }
 
-    // Model load handlers
-    modelEl.addEventListener('model-loaded', () => {
-      modelLoaded = true;
-      dbg('model-loaded event');
-      // hide until marker found (already false), auto-fit
-      setTimeout(autoFitModel, 150);
-    });
-    modelEl.addEventListener('model-error', (e) => {
-      modelLoaded = false;
-      dbg('model-error: ' + JSON.stringify(e.detail || {}), true);
-      statusEl.textContent = 'GLBの読み込みに失敗しました。ファイル名・パスを確認してください。';
-    });
-
-    // Controls
-    function setScale(value){
-      currentScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, value));
-      modelEl.setAttribute('scale', `${currentScale} ${currentScale} ${currentScale}`);
-      statusEl.textContent = 'モデル scale: ' + currentScale.toFixed(2);
-    }
-    largerBtn.addEventListener('click', () => setScale(currentScale + 0.05));
-    smallerBtn.addEventListener('click', () => setScale(currentScale - 0.05));
-    function rotateY(deltaDeg){
-      currentYRotation = (currentYRotation + deltaDeg) % 360;
-      modelEl.setAttribute('rotation', `0 ${currentYRotation} 0`);
-      statusEl.textContent = 'モデル rotationY: ' + currentYRotation.toFixed(0) + '°';
-    }
-    rotLBtn.addEventListener('click', () => rotateY(-10));
-    rotRBtn.addEventListener('click', () => rotateY(10));
-
-    // Wait for MindAR system
-    async function waitForMindARSystem(){
-      for(let i=0;i<60;i++){
-        const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
-        if(sys) return sys;
-        await new Promise(r=>setTimeout(r,200));
-      }
-      return null;
-    }
-
-    // Start: probe getUserMedia first to ensure permission prompt, then mindar.start()
-    startBtn.addEventListener('click', async () => {
+      // Start MindAR
+      targetGuide && (targetGuide.style.display = 'block');
+      statusEl.textContent = 'カメラを起動しています...';
       try{
-        if(!window.isSecureContext){
-          statusEl.textContent = 'HTTPSが必要です。GitHub Pagesで公開してください。';
-          dbg('Not secure context', true);
-          return;
-        }
-        if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-          statusEl.textContent = 'カメラAPIが利用できません。対応ブラウザで開いてください。';
-          dbg('getUserMedia not supported', true);
-          return;
-        }
-        if(!sceneLoaded){
-          statusEl.textContent = 'シーンがまだ読み込まれていません。少し待ってください。';
-          dbg('scene not loaded yet', true);
-          return;
-        }
-
-        const mindar = await waitForMindARSystem();
-        if(!mindar){
-          statusEl.textContent = 'MindARシステムが見つかりません。スクリプトの読み込みを確認してください。';
-          dbg('mindar-image-system not found', true);
-          return;
-        }
-
-        // Probe camera permission
-        statusEl.textContent = 'カメラ許可を確認しています。許可ダイアログが出たら許可してください。';
-        try{
-          const s = await navigator.mediaDevices.getUserMedia({ video:true });
-          dbg('getUserMedia probe OK');
-          s.getTracks().forEach(t=>t.stop());
-        } catch(e){
-          dbg('getUserMedia probe failed: ' + (e && e.message ? e.message : e), true);
-          statusEl.textContent = 'カメラ許可が必要です。サイトのカメラ許可を確認してください。';
-          return;
-        }
-
-        // Start MindAR
-        targetGuide.style.display = 'block';
-        statusEl.textContent = 'カメラを起動しています...';
-        try{
-          await mindar.start();
-          arStarted = true;
-          dbg('mindar.start() succeeded');
-        } catch(startErr){
-          dbg('mindar.start() failed: ' + (startErr && startErr.message ? startErr.message : startErr), true);
-          statusEl.textContent = 'MindAR の開始に失敗しました。コンソールを確認してください。';
-          return;
-        }
-
-        // style adjustments
-        setTimeout(() => {
-          const video = document.querySelector('video');
-          const canvas = document.querySelector('canvas');
-          if(video){ video.style.objectFit='cover'; video.style.zIndex='0'; }
-          if(canvas){ canvas.style.zIndex='1'; canvas.style.background='transparent'; }
-        }, 500);
-
-        statusEl.textContent = '探索中です。名刺（マーカー）を画面中央に入れてください。';
-      } catch(e){
-        dbg('startBtn error: ' + (e && e.message ? e.message : e), true);
-        statusEl.textContent = 'カメラ開始に失敗しました。コンソールを確認してください。';
+        await mindar.start();
+        arStarted = true;
+        dbg('mindar.start() succeeded');
+      } catch(startErr){
+        dbg('mindar.start() failed: ' + (startErr && startErr.message ? startErr.message : startErr), true);
+        statusEl.textContent = 'MindAR の開始に失敗しました。コンソールを確認してください。';
+        return;
       }
-    });
 
-    // Stop
-    stopBtn.addEventListener('click', () => {
-      const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
-      if(sys) try{ sys.stop(); dbg('mindar.stop() called'); } catch(e){ dbg('mindar.stop error: '+e.message, true); }
-      arStarted = false;
-      targetGuide.style.display = 'none';
-      foundBanner.style.display = 'none';
-      statusEl.textContent = '停止しました。';
-    });
+      // Ensure video/canvas visible and on top of background
+      setTimeout(() => {
+        const video = document.querySelector('video');
+        const canvas = document.querySelector('canvas');
+        if(video){
+          video.style.position='fixed';
+          video.style.top='0';
+          video.style.left='0';
+          video.style.width='100vw';
+          video.style.height='100vh';
+          video.style.objectFit='cover';
+          video.style.zIndex='0';
+          video.style.display='block';
+        }
+        if(canvas){
+          canvas.style.position='fixed';
+          canvas.style.top='0';
+          canvas.style.left='0';
+          canvas.style.width='100vw';
+          canvas.style.height='100vh';
+          canvas.style.zIndex='1';
+          canvas.style.background='transparent';
+        }
+      }, 500);
 
-    // Marker events: show/hide model with small delay to reduce flicker
-    markerEl.addEventListener('targetFound', () => {
-      targetGuide.style.display = 'none';
-      foundBanner.style.display = 'block';
-      if(modelLoaded){
-        setTimeout(()=> modelEl.setAttribute('visible','true'), 80);
-        statusEl.textContent = '潮見ジオラマを発見しました。';
-        dbg('targetFound: model shown');
-      } else {
-        statusEl.textContent = 'マーカー認識済み。GLB読み込みを確認してください。';
-        dbg('targetFound but model not loaded', true);
-      }
-      setTimeout(()=> foundBanner.style.display='none', 2000);
-    });
-
-    markerEl.addEventListener('targetLost', () => {
-      if(!arStarted) return;
-      modelEl.setAttribute('visible','false');
-      foundBanner.style.display = 'none';
-      targetGuide.style.display = 'block';
-      statusEl.textContent = 'マーカーを見失いました。もう一度中央に入れてください。';
-      dbg('targetLost: model hidden');
-    });
-
-    // Stabilizer component to smooth jitter
-    AFRAME.registerComponent('stabilizer', {
-      schema: { target:{ type:'selector' }, lerp:{ type:'number', default: POSITION_LERP }, slerp:{ type:'number', default: QUAT_SLERP } },
-      init: function(){
-        this.targetObj = this.data.target ? this.data.target.object3D : null;
-        this.tempPos = new THREE.Vector3();
-        this.tempQuat = new THREE.Quaternion();
-      },
-      tick: function(){
-        if(!this.targetObj) return;
-        const desiredWorldPos = new THREE.Vector3();
-        const desiredWorldQuat = new THREE.Quaternion();
-        this.targetObj.getWorldPosition(desiredWorldPos);
-        this.targetObj.getWorldQuaternion(desiredWorldQuat);
-
-        const currentWorldPos = new THREE.Vector3();
-        const currentWorldQuat = new THREE.Quaternion();
-        this.el.object3D.getWorldPosition(currentWorldPos);
-        this.el.object3D.getWorldQuaternion(currentWorldQuat);
-
-        currentWorldPos.lerp(desiredWorldPos, this.data.lerp);
-        currentWorldQuat.slerp(desiredWorldQuat, this.data.slerp);
-
-        const parent = this.el.object3D.parent;
-        if(parent) parent.worldToLocal(currentWorldPos);
-
-        this.el.object3D.position.copy(currentWorldPos);
-        this.el.object3D.quaternion.copy(currentWorldQuat);
-      }
-    });
-
-    sceneEl.addEventListener('loaded', () => {
-      modelEl.setAttribute('stabilizer', { target:'#markerTarget', lerp: POSITION_LERP, slerp: QUAT_SLERP });
-      dbg('stabilizer attached');
-    });
-
-    // Touch: pinch to scale, double-tap to reset
-    function touchDistance(e){
-      if(e.touches.length < 2) return 0;
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      return Math.hypot(dx, dy);
+      statusEl.textContent = '探索中です。名刺（マーカー）を画面中央に入れてください。';
+    } catch(e){
+      dbg('startBtn error: ' + (e && e.message ? e.message : e), true);
+      statusEl.textContent = 'カメラ開始に失敗しました。コンソールを確認してください。';
     }
-    let lastTouchDist = null;
-    let lastTap = 0;
-    window.addEventListener('touchstart', (e) => {
-      if(e.touches.length === 2) lastTouchDist = touchDistance(e);
-      else if(e.touches.length === 1){
-        const now = Date.now();
-        if(now - lastTap < 350){
-          if(typeof initialScale !== 'undefined') setScale(initialScale);
-          else autoFitModel();
-        }
-        lastTap = now;
+  });
+
+  // Stop
+  stopBtn.addEventListener('click', () => {
+    const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
+    if(sys) try{ sys.stop(); dbg('mindar.stop() called'); } catch(e){ dbg('mindar.stop error: '+e.message, true); }
+    arStarted = false;
+    targetGuide && (targetGuide.style.display = 'none');
+    foundBanner.style.display = 'none';
+    statusEl.textContent = '停止しました。';
+  });
+
+  // Marker events: show/hide model with small delay to reduce flicker
+  markerEl.addEventListener('targetFound', () => {
+    targetGuide && (targetGuide.style.display = 'none');
+    foundBanner.style.display = 'block';
+    if(modelLoaded){
+      setTimeout(()=> modelEl.setAttribute('visible','true'), 80);
+      statusEl.textContent = '潮見ジオラマを発見しました。';
+      dbg('targetFound: model shown');
+    } else {
+      statusEl.textContent = 'マーカー認識済み。GLB読み込みを確認してください。';
+      dbg('targetFound but model not loaded', true);
+    }
+    setTimeout(()=> foundBanner.style.display='none', 2000);
+  });
+
+  markerEl.addEventListener('targetLost', () => {
+    if(!arStarted) return;
+    modelEl.setAttribute('visible','false');
+    foundBanner.style.display = 'none';
+    targetGuide && (targetGuide.style.display = 'block');
+    statusEl.textContent = 'マーカーを見失いました。もう一度中央に入れてください。';
+    dbg('targetLost: model hidden');
+  });
+
+  // Stabilizer component to smooth jitter
+  AFRAME.registerComponent('stabilizer', {
+    schema: { target:{ type:'selector' }, lerp:{ type:'number', default: POSITION_LERP }, slerp:{ type:'number', default: QUAT_SLERP } },
+    init: function(){
+      this.targetObj = this.data.target ? this.data.target.object3D : null;
+      this.tempPos = new THREE.Vector3();
+      this.tempQuat = new THREE.Quaternion();
+    },
+    tick: function(){
+      if(!this.targetObj) return;
+      const desiredWorldPos = new THREE.Vector3();
+      const desiredWorldQuat = new THREE.Quaternion();
+      this.targetObj.getWorldPosition(desiredWorldPos);
+      this.targetObj.getWorldQuaternion(desiredWorldQuat);
+
+      const currentWorldPos = new THREE.Vector3();
+      const currentWorldQuat = new THREE.Quaternion();
+      this.el.object3D.getWorldPosition(currentWorldPos);
+      this.el.object3D.getWorldQuaternion(currentWorldQuat);
+
+      currentWorldPos.lerp(desiredWorldPos, this.data.lerp);
+      currentWorldQuat.slerp(desiredWorldQuat, this.data.slerp);
+
+      const parent = this.el.object3D.parent;
+      if(parent) parent.worldToLocal(currentWorldPos);
+
+      this.el.object3D.position.copy(currentWorldPos);
+      this.el.object3D.quaternion.copy(currentWorldQuat);
+    }
+  });
+
+  sceneEl.addEventListener('loaded', () => {
+    modelEl.setAttribute('stabilizer', { target:'#markerTarget', lerp: POSITION_LERP, slerp: QUAT_SLERP });
+    dbg('stabilizer attached');
+  });
+
+  // Touch: pinch to scale, double-tap to reset
+  function touchDistance(e){
+    if(e.touches.length < 2) return 0;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    return Math.hypot(dx, dy);
+  }
+  let lastTouchDist = null;
+  let lastTap = 0;
+  window.addEventListener('touchstart', (e) => {
+    if(e.touches.length === 2) lastTouchDist = touchDistance(e);
+    else if(e.touches.length === 1){
+      const now = Date.now();
+      if(now - lastTap < 350){
+        if(typeof initialScale !== 'undefined') setScale(initialScale);
+        else autoFitModel();
       }
-    }, { passive:true });
+      lastTap = now;
+    }
+  }, { passive:true });
 
-    window.addEventListener('touchmove', (e) => {
-      if(e.touches.length === 2 && lastTouchDist !== null){
-        const dist = touchDistance(e);
-        if(dist > 0){
-          const scaleFactor = dist / lastTouchDist;
-          let newScale = currentScale * scaleFactor;
-          newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
-          setScale(newScale);
-          lastTouchDist = dist;
-        }
-        e.preventDefault();
+  window.addEventListener('touchmove', (e) => {
+    if(e.touches.length === 2 && lastTouchDist !== null){
+      const dist = touchDistance(e);
+      if(dist > 0){
+        const scaleFactor = dist / lastTouchDist;
+        let newScale = currentScale * scaleFactor;
+        newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
+        setScale(newScale);
+        lastTouchDist = dist;
       }
-    }, { passive:false });
+      e.preventDefault();
+    }
+  }, { passive:false });
 
-    window.addEventListener('touchend', (e) => {
-      if(e.touches.length < 2) lastTouchDist = null;
-    }, { passive:true });
+  window.addEventListener('touchend', (e) => {
+    if(e.touches.length < 2) lastTouchDist = null;
+  }, { passive:true });
 
-    // Cleanup
-    window.addEventListener('beforeunload', () => {
-      const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
-      if(sys) try{ sys.stop(); } catch(e){}
-    });
-  </script>
+  // Cleanup
+  window.addEventListener('beforeunload', () => {
+    const sys = sceneEl.systems && sceneEl.systems['mindar-image-system'];
+    if(sys) try{ sys.stop(); } catch(e){}
+  });
+</script>
 </body>
 </html>
