@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR GLB読込確認版</title>
+<title>潮見ジオラマ AR 強制表示版</title>
 
 <!-- A-Frame -->
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -94,6 +94,16 @@ button:active {
 
 #stopBtn {
   background: #333;
+  color: #fff;
+}
+
+#resetBtn {
+  background: #005bd3;
+  color: #fff;
+}
+
+#checkBtn {
+  background: #00a36c;
   color: #fff;
 }
 
@@ -190,9 +200,9 @@ button:active {
   <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
 
     <!-- 光源 -->
-    <a-light type="ambient" intensity="2.2"></a-light>
-    <a-light type="directional" intensity="2.4" position="0 1 2"></a-light>
-    <a-light type="point" intensity="1.8" position="0 0 1"></a-light>
+    <a-light type="ambient" intensity="2.4"></a-light>
+    <a-light type="directional" intensity="2.8" position="0 1 2"></a-light>
+    <a-light type="point" intensity="2.0" position="0 0 1"></a-light>
 
     <!-- 赤い箱：AR基準点 -->
     <a-box
@@ -204,10 +214,10 @@ button:active {
       color="#ff0000">
     </a-box>
 
-    <!-- 水色ワイヤー箱：モデルを出したい範囲 -->
+    <!-- 水色ワイヤー箱：モデル表示予定範囲 -->
     <a-box
       id="modelBounds"
-      position="0 0 0.35"
+      position="0 0 0.22"
       width="0.8"
       height="0.8"
       depth="0.8"
@@ -217,12 +227,12 @@ button:active {
     <!-- モデル親 -->
     <a-entity
       id="modelRoot"
-      position="0 0 0.35"
+      position="0 0 0.22"
       rotation="0 0 0"
       scale="1 1 1"
       visible="true">
 
-      <!-- GLB本体：asset経由ではなく直接URLで読み込む -->
+      <!-- GLB本体 -->
       <a-entity
         id="shiomi"
         gltf-model="url(./shiomi_city.glb)"
@@ -275,9 +285,11 @@ let arStarted = false;
 let rootScale = 1.0;
 let currentX = 0.0;
 let currentY = 0.0;
-let currentZ = 0.35;
+let currentZ = 0.22;
 
-let autoInnerScale = 1.0;
+let innerScale = 1.0;
+let boxSizeText = '';
+let boxCenterText = '';
 
 window.addEventListener('load', () => {
   statusEl.textContent =
@@ -294,51 +306,54 @@ sceneEl.addEventListener('loaded', () => {
 
 function countMeshes() {
   const obj = modelEl.object3D;
+
+  let childCount = 0;
   let meshCount = 0;
   let visibleMeshCount = 0;
-  let childCount = 0;
 
   obj.traverse((node) => {
     childCount++;
 
     if (node.isMesh) {
       meshCount++;
+
       if (node.visible) {
         visibleMeshCount++;
       }
     }
   });
 
-  return { meshCount, visibleMeshCount, childCount };
+  return {
+    childCount,
+    meshCount,
+    visibleMeshCount
+  };
 }
 
-function forceMaterialVisible() {
+function forceMaterialGreen() {
   const THREE = AFRAME.THREE;
   const obj = modelEl.object3D;
 
   obj.traverse((node) => {
     node.visible = true;
     node.frustumCulled = false;
+    node.renderOrder = 999;
 
-    if (node.isMesh && node.material) {
-      const materials = Array.isArray(node.material) ? node.material : [node.material];
+    if (node.isMesh) {
+      node.visible = true;
+      node.frustumCulled = false;
+      node.renderOrder = 999;
 
-      materials.forEach((mat) => {
-        mat.side = THREE.DoubleSide;
-        mat.transparent = false;
-        mat.opacity = 1;
-        mat.depthTest = true;
-        mat.depthWrite = true;
-
-        if (mat.color) {
-          const tooDark = mat.color.r < 0.03 && mat.color.g < 0.03 && mat.color.b < 0.03;
-          if (tooDark) {
-            mat.color.set('#dddddd');
-          }
-        }
-
-        mat.needsUpdate = true;
+      node.material = new THREE.MeshBasicMaterial({
+        color: 0x00ff00,
+        side: THREE.DoubleSide,
+        transparent: false,
+        opacity: 1.0,
+        depthTest: false,
+        depthWrite: false
       });
+
+      node.material.needsUpdate = true;
     }
   });
 }
@@ -347,7 +362,7 @@ function fitModelToView() {
   const THREE = AFRAME.THREE;
   const obj = modelEl.object3D;
 
-  forceMaterialVisible();
+  forceMaterialGreen();
 
   obj.updateMatrixWorld(true);
 
@@ -355,13 +370,19 @@ function fitModelToView() {
 
   if (counts.meshCount === 0) {
     statusEl.textContent =
-      'GLBは読み込みイベントが出ましたが、メッシュが0です。\n' +
-      'この場合、位置やスケールではなく、GLBファイルの読み込み形式・中身の問題です。\n' +
-      'まずブラウザで shiomi_city.glb を直接開けるか確認してください。\n\n' +
+      'GLBは読み込みましたが、メッシュが0です。\n' +
+      'GLBの中身または形式を確認してください。\n' +
       'childCount: ' + counts.childCount + '\n' +
       'meshCount: ' + counts.meshCount;
     return;
   }
+
+  // 一度GLB本体の位置・回転・スケールを仮リセット
+  modelEl.object3D.position.set(0, 0, 0);
+  modelEl.object3D.rotation.set(0, Math.PI, 0);
+  modelEl.object3D.scale.set(1, 1, 1);
+
+  obj.updateMatrixWorld(true);
 
   const box = new THREE.Box3().setFromObject(obj);
   const size = new THREE.Vector3();
@@ -370,39 +391,64 @@ function fitModelToView() {
   box.getSize(size);
   box.getCenter(center);
 
+  boxSizeText =
+    size.x.toFixed(4) + ', ' +
+    size.y.toFixed(4) + ', ' +
+    size.z.toFixed(4);
+
+  boxCenterText =
+    center.x.toFixed(4) + ', ' +
+    center.y.toFixed(4) + ', ' +
+    center.z.toFixed(4);
+
   const maxDim = Math.max(size.x, size.y, size.z);
 
   if (!isFinite(maxDim) || maxDim <= 0) {
     statusEl.textContent =
       'メッシュはありますが、サイズ取得に失敗しました。\n' +
-      '手動表示にします。';
+      '手動表示に切り替えます。';
 
-    autoInnerScale = 1.0;
+    innerScale = 1.0;
     modelEl.object3D.position.set(0, 0, 0);
     modelEl.object3D.scale.set(1, 1, 1);
     return;
   }
 
+  // まずはかなり大きめに見える設定
   const desiredSize = 0.75;
-  autoInnerScale = desiredSize / maxDim;
+  innerScale = desiredSize / maxDim;
+  innerScale = Math.max(0.001, Math.min(80, innerScale));
 
-  autoInnerScale = Math.max(0.001, Math.min(50, autoInnerScale));
-
+  // モデル中心を親エンティティの原点へ寄せる
   modelEl.object3D.position.set(
-    -center.x * autoInnerScale,
-    -center.y * autoInnerScale,
-    -center.z * autoInnerScale
+    -center.x * innerScale,
+    -center.y * innerScale,
+    -center.z * innerScale
   );
 
-  modelEl.object3D.scale.set(autoInnerScale, autoInnerScale, autoInnerScale);
+  modelEl.object3D.scale.set(innerScale, innerScale, innerScale);
+
+  // 親は赤い四角の少し手前に固定
+  currentX = 0.0;
+  currentY = 0.0;
+  currentZ = 0.22;
+  rootScale = 1.0;
+
+  modelRoot.object3D.position.set(currentX, currentY, currentZ);
+  modelRoot.object3D.scale.set(rootScale, rootScale, rootScale);
+
+  modelBounds.object3D.position.set(currentX, currentY, currentZ);
+  modelBounds.object3D.scale.set(rootScale, rootScale, rootScale);
 
   statusEl.textContent =
-    'GLBメッシュを検出しました。\n' +
-    '表示範囲へ自動配置しました。\n' +
+    'GLBを蛍光グリーンで強制表示しました。\n' +
+    '赤い箱＝AR基準点\n' +
+    '水色ワイヤー箱＝モデル表示予定範囲\n' +
     'meshCount: ' + counts.meshCount + '\n' +
     'visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
-    'maxDim: ' + maxDim.toFixed(4) + '\n' +
-    'innerScale: ' + autoInnerScale.toFixed(4);
+    'box size: ' + boxSizeText + '\n' +
+    'box center: ' + boxCenterText + '\n' +
+    'innerScale: ' + innerScale.toFixed(4);
 }
 
 modelEl.addEventListener('model-loaded', () => {
@@ -410,7 +456,7 @@ modelEl.addEventListener('model-loaded', () => {
 
   statusEl.textContent =
     'GLB読み込みイベントが発生しました。\n' +
-    'メッシュを確認しています。';
+    'メッシュと表示位置を調整しています。';
 
   setTimeout(() => {
     fitModelToView();
@@ -427,8 +473,7 @@ modelEl.addEventListener('model-error', (e) => {
     '確認してください：\n' +
     '1. shiomi_city.glb が index.html と同じフォルダにあるか\n' +
     '2. ファイル名の大文字小文字が一致しているか\n' +
-    '3. ブラウザで shiomi_city.glb を直接開けるか\n' +
-    '4. GLBが壊れていないか';
+    '3. GLBファイルが壊れていないか';
 });
 
 function applyRootTransform() {
@@ -443,36 +488,37 @@ function applyRootTransform() {
     'rootScale: ' + rootScale.toFixed(3) + '\n' +
     'X: ' + currentX.toFixed(3) + '\n' +
     'Y: ' + currentY.toFixed(3) + '\n' +
-    'Z: ' + currentZ.toFixed(3);
+    'Z: ' + currentZ.toFixed(3) + '\n' +
+    'innerScale: ' + innerScale.toFixed(4);
 }
 
 largerBtn.addEventListener('click', () => {
-  rootScale = Math.min(30, rootScale * 1.25);
+  rootScale = Math.min(50, rootScale * 1.25);
   applyRootTransform();
 });
 
 smallerBtn.addEventListener('click', () => {
-  rootScale = Math.max(0.01, rootScale / 1.25);
+  rootScale = Math.max(0.001, rootScale / 1.25);
   applyRootTransform();
 });
 
 frontBtn.addEventListener('click', () => {
-  currentZ += 0.1;
+  currentZ += 0.10;
   applyRootTransform();
 });
 
 backBtn.addEventListener('click', () => {
-  currentZ -= 0.1;
+  currentZ -= 0.10;
   applyRootTransform();
 });
 
 upBtn.addEventListener('click', () => {
-  currentY += 0.1;
+  currentY += 0.10;
   applyRootTransform();
 });
 
 downBtn.addEventListener('click', () => {
-  currentY -= 0.1;
+  currentY -= 0.10;
   applyRootTransform();
 });
 
@@ -480,28 +526,35 @@ resetBtn.addEventListener('click', () => {
   rootScale = 1.0;
   currentX = 0.0;
   currentY = 0.0;
-  currentZ = 0.35;
+  currentZ = 0.22;
 
-  applyRootTransform();
+  modelRoot.object3D.position.set(currentX, currentY, currentZ);
+  modelRoot.object3D.scale.set(1, 1, 1);
+
+  modelBounds.object3D.position.set(currentX, currentY, currentZ);
+  modelBounds.object3D.scale.set(1, 1, 1);
+
   fitModelToView();
+
+  statusEl.textContent += '\n表示リセットを実行しました。';
 });
 
 markerEl.addEventListener('targetFound', () => {
   targetGuide.style.display = 'none';
   foundBanner.style.display = 'block';
 
+  debugBox.setAttribute('visible', 'true');
   modelRoot.setAttribute('visible', 'true');
   modelBounds.setAttribute('visible', 'true');
-  debugBox.setAttribute('visible', 'true');
 
   const counts = countMeshes();
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    '赤い箱と水色ワイヤー箱が表示されています。\n' +
+    '赤い箱・水色ワイヤー箱・蛍光グリーンモデルを確認してください。\n' +
     'meshCount: ' + counts.meshCount + '\n' +
     'visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
-    'meshCountが0の場合、GLBがメッシュとして読めていません。';
+    '見えない場合は「表示リセット」「＋」「前へ」を押してください。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
@@ -561,7 +614,9 @@ startBtn.addEventListener('click', async () => {
     }
 
     targetGuide.style.display = 'block';
-    statusEl.textContent = 'カメラを起動しています。許可してください。';
+    statusEl.textContent =
+      'カメラを起動しています。\n' +
+      'カメラ許可をしてください。';
 
     await mindar.start();
 
@@ -598,6 +653,15 @@ checkBtn.addEventListener('click', () => {
   const mindar = sceneEl.systems['mindar-image-system'];
   const counts = countMeshes();
 
+  const THREE = AFRAME.THREE;
+  const obj = modelEl.object3D;
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+
+  box.getSize(size);
+  box.getCenter(center);
+
   statusEl.textContent =
     '状態確認\n' +
     'HTTPS: ' + window.isSecureContext + '\n' +
@@ -608,9 +672,18 @@ checkBtn.addEventListener('click', () => {
     'meshCount: ' + counts.meshCount + '\n' +
     'visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
     'rootScale: ' + rootScale.toFixed(3) + '\n' +
-    'innerScale: ' + autoInnerScale.toFixed(4) + '\n' +
+    'innerScale: ' + innerScale.toFixed(4) + '\n' +
+    'X: ' + currentX.toFixed(3) + '\n' +
     'Y: ' + currentY.toFixed(3) + '\n' +
-    'Z: ' + currentZ.toFixed(3);
+    'Z: ' + currentZ.toFixed(3) + '\n' +
+    'box size: ' +
+      size.x.toFixed(4) + ', ' +
+      size.y.toFixed(4) + ', ' +
+      size.z.toFixed(4) + '\n' +
+    'box center: ' +
+      center.x.toFixed(4) + ', ' +
+      center.y.toFixed(4) + ', ' +
+      center.z.toFixed(4);
 });
 </script>
 
