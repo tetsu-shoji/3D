@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR ソリッド表示・表裏補正ON版</title>
+<title>潮見ジオラマ AR レイヤー高さ補正版</title>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
@@ -89,7 +89,6 @@ button:active {
 #rotateBtn { background: #673ab7; color: #fff; }
 #angleBtn { background: #009688; color: #fff; }
 #swapBtn { background: #795548; color: #fff; }
-#flipBtn { background: #455a64; color: #fff; }
 #checkBtn { background: #00a36c; color: #fff; }
 
 #status {
@@ -166,7 +165,6 @@ button:active {
     <button id="angleBtn">角度切替</button>
     <button id="colorBtn">色切替</button>
     <button id="swapBtn">道路/建物入替</button>
-    <button id="flipBtn">表裏補正</button>
     <button id="resetBtn">表示リセット</button>
     <button id="checkBtn">確認</button>
   </div>
@@ -265,7 +263,6 @@ const rotateBtn = document.querySelector('#rotateBtn');
 const angleBtn = document.querySelector('#angleBtn');
 const colorBtn = document.querySelector('#colorBtn');
 const swapBtn = document.querySelector('#swapBtn');
-const flipBtn = document.querySelector('#flipBtn');
 const resetBtn = document.querySelector('#resetBtn');
 const checkBtn = document.querySelector('#checkBtn');
 
@@ -295,13 +292,6 @@ let colorMode = 0;
 let yawMode = 0;
 let angleMode = 0;
 let swapRoadBuilding = false;
-
-/*
-  重要：
-  このGLBでは建物が地面の下にぶら下がるため、
-  初期状態で表裏補正ONにします。
-*/
-let flipSurface = true;
 
 const colorSets = [
   {
@@ -366,7 +356,6 @@ function countSourceMeshes() {
 
   obj.traverse((node) => {
     c++;
-
     if (node.isMesh) {
       m++;
       if (node.visible) v++;
@@ -416,9 +405,10 @@ function getGeometryVolume(geom) {
 }
 
 /*
-  今回のGLBは、すでに名刺面と地面が平行になる座標系とみなす。
-  X/Y/Z の入れ替えはしない。
-  ただし、建物が地面の下に出るため、初期状態でZを反転する。
+  今回の方針：
+  モデル全体のZ反転はしない。
+  X/Y/Zの入れ替えもしない。
+  代わりに、土地・道路・建物ごとに高さを正規化する。
 */
 function remapYUpToARZUp(geom) {
   const position = geom.attributes.position;
@@ -429,12 +419,7 @@ function remapYUpToARZUp(geom) {
     const y = position.getY(i);
     const z = position.getZ(i);
 
-    if (!flipSurface) {
-      position.setXYZ(i, x, y, z);
-    } else {
-      // 高さ方向Zを反転して、建物が地面の上に出るようにする
-      position.setXYZ(i, x, y, -z);
-    }
+    position.setXYZ(i, x, y, z);
   }
 
   position.needsUpdate = true;
@@ -488,12 +473,41 @@ function getLayerType(index, item) {
   return 'other';
 }
 
-function getLayerLift(layerType) {
-  // Zプラス方向 = 地面から上
-  if (layerType === 'land') return -0.004;
-  if (layerType === 'building') return 0.020;
-  if (layerType === 'road') return 0.055;
-  return 0.012;
+/*
+  レイヤーごとに高さを整える。
+  土地：上面をz=0付近へ
+  道路：地面より少し上へ
+  建物：底面を地面より上へ
+*/
+function normalizeLayerHeight(geom, layerType) {
+  geom.computeBoundingBox();
+
+  if (!geom.boundingBox) return;
+
+  const box = geom.boundingBox;
+  const minZ = box.min.z;
+  const maxZ = box.max.z;
+
+  if (layerType === 'land') {
+    // 土地の上面を z=0 の少し下へ
+    geom.translate(0, 0, -maxZ - 0.006);
+    return;
+  }
+
+  if (layerType === 'road') {
+    // 道路の下面を土地より少し上へ
+    geom.translate(0, 0, -minZ + 0.050);
+    return;
+  }
+
+  if (layerType === 'building') {
+    // 建物の底面を土地より上へ
+    geom.translate(0, 0, -minZ + 0.020);
+    return;
+  }
+
+  // その他
+  geom.translate(0, 0, -minZ + 0.015);
 }
 
 function getLayerRenderOrder(layerType) {
@@ -520,11 +534,14 @@ function makeSolidMaterialForLayer(colorValue, layerType) {
     polygonOffsetUnits = 3;
   }
 
-  return new THREE.MeshStandardMaterial({
+  /*
+    MeshBasicMaterialにしています。
+    法線や光の向きによる「裏から見ている感じ」を抑え、
+    色分けを優先して安定表示します。
+  */
+  return new THREE.MeshBasicMaterial({
     color: colorValue,
     side: THREE.DoubleSide,
-    roughness: 0.72,
-    metalness: 0.02,
     transparent: false,
     opacity: 1.0,
     depthTest: true,
@@ -587,7 +604,7 @@ function extractMeshesToProxy() {
 
     geom.applyMatrix4(relativeMatrix);
 
-    // 座標入れ替えなし。初期状態ではZ反転あり。
+    // 座標は入れ替えない。全体反転もしない。
     remapYUpToARZUp(geom);
 
     geom.computeVertexNormals();
@@ -652,7 +669,6 @@ function extractMeshesToProxy() {
     const geom = item.geometry;
 
     const layerType = getLayerType(index, item);
-    const liftZ = getLayerLift(layerType);
 
     // 中心補正
     geom.translate(-center.x, -center.y, -center.z);
@@ -660,8 +676,8 @@ function extractMeshesToProxy() {
     // スケール
     geom.scale(innerScale, innerScale, innerScale);
 
-    // 道路・建物・地面の高さ補正
-    geom.translate(0, 0, liftZ);
+    // 重要：土地・道路・建物をレイヤーごとに高さ正規化
+    normalizeLayerHeight(geom, layerType);
 
     let colorValue = colors.other;
     if (layerType === 'land') colorValue = colors.land;
@@ -699,12 +715,10 @@ function extractMeshesToProxy() {
 
   statusEl.textContent =
     'ソリッド表示で自動表示しました。\n' +
-    '初期状態で表裏補正ONです。\n' +
-    '建物が地面の上に出る向きにしています。\n' +
-    '道路は地面より上に補正しています。\n' +
+    '全体反転ではなく、土地・道路・建物をレイヤーごとに高さ補正しています。\n' +
+    '土地は上面を基準、道路と建物は地面より上に配置しています。\n' +
     '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
     '角度: ' + angleModes[angleMode].name + '\n' +
-    '表裏補正: ' + (flipSurface ? 'ON' : 'OFF') + '\n' +
     '道路/建物入替: ' + (swapRoadBuilding ? '入替中' : '通常') + '\n' +
     'source meshCount: ' + counts.meshCount + '\n' +
     'proxyMeshCount: ' + proxyMeshCount + '\n' +
@@ -752,7 +766,6 @@ function applyRootTransform(showMessage = true) {
       'Z: ' + currentZ.toFixed(3) + '\n' +
       '角度: ' + angleModes[angleMode].name + '\n' +
       '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
-      '表裏補正: ' + (flipSurface ? 'ON' : 'OFF') + '\n' +
       '道路/建物入替: ' + (swapRoadBuilding ? '入替中' : '通常') + '\n' +
       'proxyMeshCount: ' + proxyMeshCount;
   }
@@ -834,23 +847,11 @@ swapBtn.addEventListener('click', () => {
     '現在: ' + (swapRoadBuilding ? '入替中' : '通常');
 });
 
-flipBtn.addEventListener('click', () => {
-  flipSurface = !flipSurface;
-  extractMeshesToProxy();
-
-  statusEl.textContent +=
-    '\n表裏補正を切り替えました。\n' +
-    '現在: ' + (flipSurface ? 'ON' : 'OFF');
-});
-
 resetBtn.addEventListener('click', () => {
   rootScale = 1.0;
   currentX = 0.0;
   angleMode = 0;
   yawMode = 0;
-
-  // 重要：このGLBでは表裏補正ONを標準にする
-  flipSurface = true;
 
   const mode = angleModes[angleMode];
   currentY = mode.y;
@@ -860,8 +861,8 @@ resetBtn.addEventListener('click', () => {
 
   statusEl.textContent =
     '表示リセットしました。\n' +
-    '表裏補正ON、Z軸0度回転です。\n' +
-    '建物が地面の上に出る向きにしています。';
+    '全体反転ではなく、土地・道路・建物をレイヤーごとに高さ補正しています。\n' +
+    '土地は上面を基準、道路と建物は地面より上に配置しています。';
 });
 
 markerEl.addEventListener('targetFound', () => {
@@ -878,8 +879,8 @@ markerEl.addEventListener('targetFound', () => {
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    '初期状態で表裏補正ONです。\n' +
-    '建物が地面の上に出る向きにしています。';
+    '土地・道路・建物をレイヤーごとに高さ補正しています。\n' +
+    '道路や建物が逆の場合は「道路/建物入替」を押してください。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
@@ -1002,7 +1003,6 @@ checkBtn.addEventListener('click', () => {
     'Z: ' + currentZ.toFixed(3) + '\n' +
     '角度: ' + angleModes[angleMode].name + '\n' +
     '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
-    '表裏補正: ' + (flipSurface ? 'ON' : 'OFF') + '\n' +
     '道路/建物入替: ' + (swapRoadBuilding ? '入替中' : '通常') + '\n' +
     'box size: ' + boxSizeText + '\n' +
     'box center: ' + boxCenterText;
