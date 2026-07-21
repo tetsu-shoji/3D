@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR ソリッド表示・平行補正版</title>
+<title>潮見ジオラマ AR ソリッド表示・表裏補正ON版</title>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
@@ -295,7 +295,13 @@ let colorMode = 0;
 let yawMode = 0;
 let angleMode = 0;
 let swapRoadBuilding = false;
-let flipSurface = false;
+
+/*
+  重要：
+  このGLBでは建物が地面の下にぶら下がるため、
+  初期状態で表裏補正ONにします。
+*/
+let flipSurface = true;
 
 const colorSets = [
   {
@@ -411,8 +417,8 @@ function getGeometryVolume(geom) {
 
 /*
   今回のGLBは、すでに名刺面と地面が平行になる座標系とみなす。
-  そのため、X/Y/Z の入れ替えはしない。
-  表裏が逆の場合のみ Z を反転する。
+  X/Y/Z の入れ替えはしない。
+  ただし、建物が地面の下に出るため、初期状態でZを反転する。
 */
 function remapYUpToARZUp(geom) {
   const position = geom.attributes.position;
@@ -426,6 +432,7 @@ function remapYUpToARZUp(geom) {
     if (!flipSurface) {
       position.setXYZ(i, x, y, z);
     } else {
+      // 高さ方向Zを反転して、建物が地面の上に出るようにする
       position.setXYZ(i, x, y, -z);
     }
   }
@@ -485,7 +492,7 @@ function getLayerLift(layerType) {
   // Zプラス方向 = 地面から上
   if (layerType === 'land') return -0.004;
   if (layerType === 'building') return 0.020;
-  if (layerType === 'road') return 0.045;
+  if (layerType === 'road') return 0.055;
   return 0.012;
 }
 
@@ -503,14 +510,14 @@ function makeSolidMaterialForLayer(colorValue, layerType) {
   let polygonOffsetUnits = 0;
 
   if (layerType === 'road') {
-    polygonOffsetFactor = -8;
-    polygonOffsetUnits = -8;
+    polygonOffsetFactor = -10;
+    polygonOffsetUnits = -10;
   } else if (layerType === 'building') {
     polygonOffsetFactor = -4;
     polygonOffsetUnits = -4;
   } else if (layerType === 'land') {
-    polygonOffsetFactor = 2;
-    polygonOffsetUnits = 2;
+    polygonOffsetFactor = 3;
+    polygonOffsetUnits = 3;
   }
 
   return new THREE.MeshStandardMaterial({
@@ -580,7 +587,7 @@ function extractMeshesToProxy() {
 
     geom.applyMatrix4(relativeMatrix);
 
-    // 座標は入れ替えない。必要時のみZ反転。
+    // 座標入れ替えなし。初期状態ではZ反転あり。
     remapYUpToARZUp(geom);
 
     geom.computeVertexNormals();
@@ -692,9 +699,9 @@ function extractMeshesToProxy() {
 
   statusEl.textContent =
     'ソリッド表示で自動表示しました。\n' +
-    'GLBの座標を入れ替えず、名刺面と地面が平行になる前提で表示しています。\n' +
+    '初期状態で表裏補正ONです。\n' +
+    '建物が地面の上に出る向きにしています。\n' +
     '道路は地面より上に補正しています。\n' +
-    '地面の表裏が逆の場合は「表裏補正」を押してください。\n' +
     '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
     '角度: ' + angleModes[angleMode].name + '\n' +
     '表裏補正: ' + (flipSurface ? 'ON' : 'OFF') + '\n' +
@@ -841,7 +848,9 @@ resetBtn.addEventListener('click', () => {
   currentX = 0.0;
   angleMode = 0;
   yawMode = 0;
-  flipSurface = false;
+
+  // 重要：このGLBでは表裏補正ONを標準にする
+  flipSurface = true;
 
   const mode = angleModes[angleMode];
   currentY = mode.y;
@@ -851,7 +860,8 @@ resetBtn.addEventListener('click', () => {
 
   statusEl.textContent =
     '表示リセットしました。\n' +
-    '座標入れ替えなし、表裏補正OFF、Z軸0度回転です。';
+    '表裏補正ON、Z軸0度回転です。\n' +
+    '建物が地面の上に出る向きにしています。';
 });
 
 markerEl.addEventListener('targetFound', () => {
@@ -868,8 +878,8 @@ markerEl.addEventListener('targetFound', () => {
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    '名刺面と地面が平行になる前提で表示しています。\n' +
-    '地面の表裏が逆の場合は「表裏補正」を押してください。';
+    '初期状態で表裏補正ONです。\n' +
+    '建物が地面の上に出る向きにしています。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
