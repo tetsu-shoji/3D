@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR 軸補正版</title>
+<title>潮見ジオラマ AR ソリッド表示・平行補正版</title>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
@@ -292,7 +292,7 @@ let boxSizeText = '';
 let boxCenterText = '';
 
 let colorMode = 0;
-let yawMode = 0;       // 初期は0度
+let yawMode = 0;
 let angleMode = 0;
 let swapRoadBuilding = false;
 let flipSurface = false;
@@ -410,10 +410,9 @@ function getGeometryVolume(geom) {
 }
 
 /*
-  重要：
-  多くのGLBは Y軸が高さ。
-  MindARのマーカー平面上では Z軸を高さとして扱う方が扱いやすい。
-  そこで X, Y, Z を X, Z, Y に変換する。
+  今回のGLBは、すでに名刺面と地面が平行になる座標系とみなす。
+  そのため、X/Y/Z の入れ替えはしない。
+  表裏が逆の場合のみ Z を反転する。
 */
 function remapYUpToARZUp(geom) {
   const position = geom.attributes.position;
@@ -425,12 +424,9 @@ function remapYUpToARZUp(geom) {
     const z = position.getZ(i);
 
     if (!flipSurface) {
-      // GLB: X横, Y高さ, Z奥行き
-      // AR : X横, Y奥行き, Z高さ
-      position.setXYZ(i, x, z, y);
+      position.setXYZ(i, x, y, z);
     } else {
-      // 表裏が逆に見える場合の補正
-      position.setXYZ(i, x, z, -y);
+      position.setXYZ(i, x, y, -z);
     }
   }
 
@@ -584,7 +580,7 @@ function extractMeshesToProxy() {
 
     geom.applyMatrix4(relativeMatrix);
 
-    // ここでY上方向GLBを、AR用Z上方向に変換
+    // 座標は入れ替えない。必要時のみZ反転。
     remapYUpToARZUp(geom);
 
     geom.computeVertexNormals();
@@ -657,7 +653,7 @@ function extractMeshesToProxy() {
     // スケール
     geom.scale(innerScale, innerScale, innerScale);
 
-    // 地面・道路・建物の高さ補正
+    // 道路・建物・地面の高さ補正
     geom.translate(0, 0, liftZ);
 
     let colorValue = colors.other;
@@ -695,10 +691,10 @@ function extractMeshesToProxy() {
   applyRootTransform(false);
 
   statusEl.textContent =
-    '軸補正後のソリッド表示で自動表示しました。\n' +
-    'GLBのY上方向をARのZ上方向へ変換しています。\n' +
+    'ソリッド表示で自動表示しました。\n' +
+    'GLBの座標を入れ替えず、名刺面と地面が平行になる前提で表示しています。\n' +
     '道路は地面より上に補正しています。\n' +
-    '表裏が逆の場合は「表裏補正」を押してください。\n' +
+    '地面の表裏が逆の場合は「表裏補正」を押してください。\n' +
     '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
     '角度: ' + angleModes[angleMode].name + '\n' +
     '表裏補正: ' + (flipSurface ? 'ON' : 'OFF') + '\n' +
@@ -713,7 +709,7 @@ originalEl.addEventListener('model-loaded', () => {
 
   statusEl.textContent =
     'GLBを読み込みました。\n' +
-    '軸補正して自動表示します。';
+    '自動でメッシュ抽出して表示します。';
 
   setTimeout(() => {
     extractMeshesToProxy();
@@ -810,7 +806,7 @@ angleBtn.addEventListener('click', () => {
   statusEl.textContent =
     '角度を切り替えました。\n' +
     '現在: ' + mode.name + '\n' +
-    '裏側に見える場合は「表裏補正」を押してください。';
+    '地面が傾きすぎる場合は、もう一度「角度切替」で真上に戻してください。';
 });
 
 colorBtn.addEventListener('click', () => {
@@ -855,7 +851,7 @@ resetBtn.addEventListener('click', () => {
 
   statusEl.textContent =
     '表示リセットしました。\n' +
-    '軸補正あり、表裏補正OFF、Z軸0度回転です。';
+    '座標入れ替えなし、表裏補正OFF、Z軸0度回転です。';
 });
 
 markerEl.addEventListener('targetFound', () => {
@@ -872,8 +868,8 @@ markerEl.addEventListener('targetFound', () => {
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    '軸補正後のソリッド表示です。\n' +
-    '地面が裏側に見える場合は「表裏補正」を押してください。';
+    '名刺面と地面が平行になる前提で表示しています。\n' +
+    '地面の表裏が逆の場合は「表裏補正」を押してください。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
