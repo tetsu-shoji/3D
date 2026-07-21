@@ -3,15 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR メッシュ抽出表示版</title>
+<title>潮見ジオラマ AR 色分け表示版</title>
 
-<!-- A-Frame -->
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-<!-- A-Frame Extras -->
 <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
-
-<!-- MindAR -->
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
 
 <style>
@@ -107,6 +102,11 @@ button:active {
   color: #fff;
 }
 
+#colorBtn {
+  background: #ff9800;
+  color: #fff;
+}
+
 #checkBtn {
   background: #00a36c;
   color: #fff;
@@ -183,6 +183,7 @@ button:active {
     <button id="upBtn">上へ</button>
     <button id="downBtn">下へ</button>
     <button id="extractBtn">メッシュ抽出</button>
+    <button id="colorBtn">色切替</button>
     <button id="resetBtn">表示リセット</button>
     <button id="checkBtn">確認</button>
   </div>
@@ -205,7 +206,6 @@ button:active {
 
   <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
 
-    <!-- 光源 -->
     <a-light type="ambient" intensity="2.4"></a-light>
     <a-light type="directional" intensity="2.8" position="0 1 2"></a-light>
     <a-light type="point" intensity="2.0" position="0 0 1"></a-light>
@@ -227,10 +227,10 @@ button:active {
       width="0.8"
       height="0.8"
       depth="0.8"
-      material="color: #00ffff; wireframe: true; transparent: true; opacity: 0.9;">
+      material="color: #00ffff; wireframe: true; transparent: true; opacity: 0.65;">
     </a-box>
 
-    <!-- 抽出モデルを表示する親 -->
+    <!-- 抽出モデル表示用 -->
     <a-entity
       id="modelRoot"
       position="0 0 0.22"
@@ -239,7 +239,7 @@ button:active {
       visible="true">
     </a-entity>
 
-    <!-- 元GLB。読み込み用。表示は後で非表示にします -->
+    <!-- 元GLB。読み込み専用 -->
     <a-entity
       id="shiomiOriginal"
       gltf-model="url(./shiomi_city.glb)"
@@ -266,7 +266,6 @@ const sceneEl = document.querySelector('#arScene');
 const markerEl = document.querySelector('#markerTarget');
 const originalEl = document.querySelector('#shiomiOriginal');
 const modelRoot = document.querySelector('#modelRoot');
-const debugBox = document.querySelector('#debugBox');
 const modelBounds = document.querySelector('#modelBounds');
 
 const startBtn = document.querySelector('#startBtn');
@@ -278,6 +277,7 @@ const backBtn = document.querySelector('#backBtn');
 const upBtn = document.querySelector('#upBtn');
 const downBtn = document.querySelector('#downBtn');
 const extractBtn = document.querySelector('#extractBtn');
+const colorBtn = document.querySelector('#colorBtn');
 const resetBtn = document.querySelector('#resetBtn');
 const checkBtn = document.querySelector('#checkBtn');
 
@@ -302,6 +302,16 @@ let childCount = 0;
 let innerScale = 1.0;
 let boxSizeText = '';
 let boxCenterText = '';
+let colorMode = 0;
+
+const colorSets = [
+  // 通常：土地・建物・道路を想定
+  [0x2ecc71, 0xf5f5f5, 0xffc107, 0x4fc3f7, 0xff7043],
+  // 強調：非常に見えやすい配色
+  [0x00ff00, 0xff00ff, 0x00ffff, 0xffff00, 0xff0000],
+  // 落ち着いた配色
+  [0x6abf69, 0xd9d9d9, 0x8d6e63, 0x90caf9, 0xffcc80]
+];
 
 window.addEventListener('load', () => {
   statusEl.textContent =
@@ -357,6 +367,16 @@ function clearProxyGroup() {
   }
 }
 
+function getGeometryVolume(geom) {
+  geom.computeBoundingBox();
+  if (!geom.boundingBox) return 0;
+
+  const size = new AFRAME.THREE.Vector3();
+  geom.boundingBox.getSize(size);
+
+  return Math.abs(size.x * size.y * size.z);
+}
+
 function extractMeshesToProxy() {
   const THREE = AFRAME.THREE;
 
@@ -376,7 +396,7 @@ function extractMeshesToProxy() {
 
   const inverseRootMatrix = sourceRoot.matrixWorld.clone().invert();
 
-  const geometries = [];
+  const items = [];
   const totalBox = new THREE.Box3();
   let hasBox = false;
 
@@ -388,7 +408,6 @@ function extractMeshesToProxy() {
 
     const geom = node.geometry.clone();
 
-    // 元GLB内の階層・回転・スケールを焼き込む
     const relativeMatrix = new THREE.Matrix4().multiplyMatrices(
       inverseRootMatrix,
       node.matrixWorld
@@ -403,15 +422,22 @@ function extractMeshesToProxy() {
       hasBox = true;
     }
 
-    geometries.push(geom);
+    items.push({
+      geometry: geom,
+      name: node.name || '',
+      volume: getGeometryVolume(geom)
+    });
   });
 
-  if (!hasBox || geometries.length === 0) {
+  if (!hasBox || items.length === 0) {
     statusEl.textContent =
       'メッシュはありますが、頂点情報を取得できません。\n' +
       'GLBの中身に頂点がない可能性があります。';
     return;
   }
+
+  // 大きい順にする。最大メッシュを土地扱いにしやすくするため。
+  items.sort((a, b) => b.volume - a.volume);
 
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
@@ -445,38 +471,58 @@ function extractMeshesToProxy() {
   proxyGroup = new THREE.Group();
   proxyGroup.name = 'shiomi_proxy_group';
 
-  const greenMaterial = new THREE.MeshBasicMaterial({
-    color: 0x00ff00,
-    side: THREE.DoubleSide,
-    transparent: false,
-    opacity: 1.0,
-    depthTest: false,
-    depthWrite: false
-  });
+  const colors = colorSets[colorMode % colorSets.length];
 
-  geometries.forEach((geom) => {
+  items.forEach((item, index) => {
+    const geom = item.geometry;
+
     // 中心補正とスケールをジオメトリ自体に焼き込む
     geom.translate(-center.x, -center.y, -center.z);
     geom.scale(innerScale, innerScale, innerScale);
 
-    const mesh = new THREE.Mesh(geom, greenMaterial.clone());
+    // メッシュごとに別色
+    const material = new THREE.MeshBasicMaterial({
+      color: colors[index % colors.length],
+      side: THREE.DoubleSide,
+      transparent: false,
+      opacity: 1.0,
+      depthTest: false,
+      depthWrite: false
+    });
+
+    const mesh = new THREE.Mesh(geom, material);
     mesh.visible = true;
     mesh.frustumCulled = false;
-    mesh.renderOrder = 999;
+    mesh.renderOrder = 900 + index;
 
     proxyGroup.add(mesh);
+
+    // 黒い輪郭線
+    const edgeGeom = new THREE.EdgesGeometry(geom, 15);
+    const edgeMat = new THREE.LineBasicMaterial({
+      color: 0x000000,
+      transparent: false,
+      opacity: 1.0,
+      depthTest: false,
+      depthWrite: false
+    });
+
+    const edges = new THREE.LineSegments(edgeGeom, edgeMat);
+    edges.visible = true;
+    edges.frustumCulled = false;
+    edges.renderOrder = 1000 + index;
+
+    proxyGroup.add(edges);
   });
 
   proxyMeshCount = proxyGroup.children.length;
 
-  // いったん見えやすい角度にする
   proxyGroup.rotation.set(0, Math.PI, 0);
   proxyGroup.position.set(0, 0, 0);
   proxyGroup.scale.set(1, 1, 1);
 
   modelRoot.object3D.add(proxyGroup);
 
-  // 元GLBは非表示にして、抽出モデルだけ表示
   originalEl.object3D.visible = false;
   modelRoot.object3D.visible = true;
 
@@ -488,13 +534,15 @@ function extractMeshesToProxy() {
   applyRootTransform(false);
 
   statusEl.textContent =
-    'GLBメッシュを抽出して蛍光グリーンで再表示しました。\n' +
-    '水色ワイヤー箱の中を確認してください。\n' +
+    'GLBメッシュを色分けして再表示しました。\n' +
+    '最大メッシュ＝緑系、他メッシュ＝建物・道路候補として色分けしています。\n' +
+    '黒い輪郭線も追加しました。\n' +
     'source meshCount: ' + counts.meshCount + '\n' +
-    'proxyMeshCount: ' + proxyMeshCount + '\n' +
+    'proxy children: ' + proxyMeshCount + '\n' +
     'box size: ' + boxSizeText + '\n' +
     'box center: ' + boxCenterText + '\n' +
-    'innerScale: ' + innerScale.toFixed(4);
+    'innerScale: ' + innerScale.toFixed(4) + '\n' +
+    'colorMode: ' + colorMode;
 }
 
 originalEl.addEventListener('model-loaded', () => {
@@ -502,7 +550,7 @@ originalEl.addEventListener('model-loaded', () => {
 
   statusEl.textContent =
     'GLB読み込みイベントが発生しました。\n' +
-    'メッシュ抽出を実行しています。';
+    'メッシュを色分け抽出しています。';
 
   setTimeout(() => {
     extractMeshesToProxy();
@@ -537,7 +585,7 @@ function applyRootTransform(showMessage = true) {
       'Y: ' + currentY.toFixed(3) + '\n' +
       'Z: ' + currentZ.toFixed(3) + '\n' +
       'innerScale: ' + innerScale.toFixed(4) + '\n' +
-      'proxyMeshCount: ' + proxyMeshCount;
+      'proxy children: ' + proxyMeshCount;
   }
 }
 
@@ -575,6 +623,11 @@ extractBtn.addEventListener('click', () => {
   extractMeshesToProxy();
 });
 
+colorBtn.addEventListener('click', () => {
+  colorMode = (colorMode + 1) % colorSets.length;
+  extractMeshesToProxy();
+});
+
 resetBtn.addEventListener('click', () => {
   rootScale = 1.0;
   currentX = 0.0;
@@ -590,7 +643,6 @@ markerEl.addEventListener('targetFound', () => {
   targetGuide.style.display = 'none';
   foundBanner.style.display = 'block';
 
-  debugBox.setAttribute('visible', 'true');
   modelRoot.setAttribute('visible', 'true');
   modelBounds.setAttribute('visible', 'true');
 
@@ -598,11 +650,11 @@ markerEl.addEventListener('targetFound', () => {
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    '赤い箱・水色ワイヤー箱・蛍光グリーン抽出モデルを確認してください。\n' +
+    '色分けモデルと黒い輪郭線を確認してください。\n' +
     'source meshCount: ' + counts.meshCount + '\n' +
     'visibleSourceMeshCount: ' + counts.visibleMeshCount + '\n' +
-    'proxyMeshCount: ' + proxyMeshCount + '\n' +
-    '見えない場合は「メッシュ抽出」「表示リセット」「＋」「前へ」を押してください。';
+    'proxy children: ' + proxyMeshCount + '\n' +
+    'つぶれて見える場合は「色切替」「＋」「前へ」を押してください。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
@@ -717,15 +769,15 @@ checkBtn.addEventListener('click', () => {
     'source meshCount: ' + counts.meshCount + '\n' +
     'source visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
     'proxyGroup: ' + Boolean(proxyGroup) + '\n' +
-    'proxyMeshCount: ' + proxyMeshCount + '\n' +
-    'proxyChildren: ' + proxyChildren + '\n' +
+    'proxy children: ' + proxyChildren + '\n' +
     'rootScale: ' + rootScale.toFixed(3) + '\n' +
     'innerScale: ' + innerScale.toFixed(4) + '\n' +
     'X: ' + currentX.toFixed(3) + '\n' +
     'Y: ' + currentY.toFixed(3) + '\n' +
     'Z: ' + currentZ.toFixed(3) + '\n' +
     'box size: ' + boxSizeText + '\n' +
-    'box center: ' + boxCenterText;
+    'box center: ' + boxCenterText + '\n' +
+    'colorMode: ' + colorMode;
 });
 </script>
 
