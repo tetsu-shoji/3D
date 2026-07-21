@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR 強制表示版</title>
+<title>潮見ジオラマ AR メッシュ抽出表示版</title>
 
 <!-- A-Frame -->
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -102,6 +102,11 @@ button:active {
   color: #fff;
 }
 
+#extractBtn {
+  background: #7b1fa2;
+  color: #fff;
+}
+
 #checkBtn {
   background: #00a36c;
   color: #fff;
@@ -113,7 +118,7 @@ button:active {
   right: 12px;
   bottom: 16px;
   color: #fff;
-  background: rgba(0,0,0,0.78);
+  background: rgba(0,0,0,0.80);
   border-radius: 14px;
   padding: 10px 12px;
   font-size: 13px;
@@ -177,6 +182,7 @@ button:active {
     <button id="backBtn">奥へ</button>
     <button id="upBtn">上へ</button>
     <button id="downBtn">下へ</button>
+    <button id="extractBtn">メッシュ抽出</button>
     <button id="resetBtn">表示リセット</button>
     <button id="checkBtn">確認</button>
   </div>
@@ -224,24 +230,24 @@ button:active {
       material="color: #00ffff; wireframe: true; transparent: true; opacity: 0.9;">
     </a-box>
 
-    <!-- モデル親 -->
+    <!-- 抽出モデルを表示する親 -->
     <a-entity
       id="modelRoot"
       position="0 0 0.22"
       rotation="0 0 0"
       scale="1 1 1"
       visible="true">
+    </a-entity>
 
-      <!-- GLB本体 -->
-      <a-entity
-        id="shiomi"
-        gltf-model="url(./shiomi_city.glb)"
-        position="0 0 0"
-        rotation="0 180 0"
-        scale="1 1 1"
-        animation-mixer>
-      </a-entity>
-
+    <!-- 元GLB。読み込み用。表示は後で非表示にします -->
+    <a-entity
+      id="shiomiOriginal"
+      gltf-model="url(./shiomi_city.glb)"
+      position="0 0 0"
+      rotation="0 180 0"
+      scale="1 1 1"
+      visible="false"
+      animation-mixer>
     </a-entity>
 
     <a-text
@@ -258,8 +264,8 @@ button:active {
 <script>
 const sceneEl = document.querySelector('#arScene');
 const markerEl = document.querySelector('#markerTarget');
+const originalEl = document.querySelector('#shiomiOriginal');
 const modelRoot = document.querySelector('#modelRoot');
-const modelEl = document.querySelector('#shiomi');
 const debugBox = document.querySelector('#debugBox');
 const modelBounds = document.querySelector('#modelBounds');
 
@@ -271,6 +277,7 @@ const frontBtn = document.querySelector('#frontBtn');
 const backBtn = document.querySelector('#backBtn');
 const upBtn = document.querySelector('#upBtn');
 const downBtn = document.querySelector('#downBtn');
+const extractBtn = document.querySelector('#extractBtn');
 const resetBtn = document.querySelector('#resetBtn');
 const checkBtn = document.querySelector('#checkBtn');
 
@@ -287,6 +294,11 @@ let currentX = 0.0;
 let currentY = 0.0;
 let currentZ = 0.22;
 
+let proxyGroup = null;
+let proxyMeshCount = 0;
+let sourceMeshCount = 0;
+let visibleSourceMeshCount = 0;
+let childCount = 0;
 let innerScale = 1.0;
 let boxSizeText = '';
 let boxCenterText = '';
@@ -304,92 +316,108 @@ sceneEl.addEventListener('loaded', () => {
     '開始できます。';
 });
 
-function countMeshes() {
-  const obj = modelEl.object3D;
-
-  let childCount = 0;
-  let meshCount = 0;
-  let visibleMeshCount = 0;
+function countSourceMeshes() {
+  const obj = originalEl.object3D;
+  let c = 0;
+  let m = 0;
+  let v = 0;
 
   obj.traverse((node) => {
-    childCount++;
-
+    c++;
     if (node.isMesh) {
-      meshCount++;
+      m++;
+      if (node.visible) v++;
+    }
+  });
 
-      if (node.visible) {
-        visibleMeshCount++;
+  childCount = c;
+  sourceMeshCount = m;
+  visibleSourceMeshCount = v;
+
+  return { childCount: c, meshCount: m, visibleMeshCount: v };
+}
+
+function clearProxyGroup() {
+  if (proxyGroup) {
+    modelRoot.object3D.remove(proxyGroup);
+
+    proxyGroup.traverse((node) => {
+      if (node.geometry) node.geometry.dispose();
+      if (node.material) {
+        if (Array.isArray(node.material)) {
+          node.material.forEach(mat => mat.dispose());
+        } else {
+          node.material.dispose();
+        }
       }
-    }
-  });
+    });
 
-  return {
-    childCount,
-    meshCount,
-    visibleMeshCount
-  };
+    proxyGroup = null;
+    proxyMeshCount = 0;
+  }
 }
 
-function forceMaterialGreen() {
+function extractMeshesToProxy() {
   const THREE = AFRAME.THREE;
-  const obj = modelEl.object3D;
 
-  obj.traverse((node) => {
-    node.visible = true;
-    node.frustumCulled = false;
-    node.renderOrder = 999;
+  clearProxyGroup();
 
-    if (node.isMesh) {
-      node.visible = true;
-      node.frustumCulled = false;
-      node.renderOrder = 999;
+  const sourceRoot = originalEl.object3D;
+  sourceRoot.updateMatrixWorld(true);
 
-      node.material = new THREE.MeshBasicMaterial({
-        color: 0x00ff00,
-        side: THREE.DoubleSide,
-        transparent: false,
-        opacity: 1.0,
-        depthTest: false,
-        depthWrite: false
-      });
-
-      node.material.needsUpdate = true;
-    }
-  });
-}
-
-function fitModelToView() {
-  const THREE = AFRAME.THREE;
-  const obj = modelEl.object3D;
-
-  forceMaterialGreen();
-
-  obj.updateMatrixWorld(true);
-
-  const counts = countMeshes();
+  const counts = countSourceMeshes();
 
   if (counts.meshCount === 0) {
     statusEl.textContent =
-      'GLBは読み込みましたが、メッシュが0です。\n' +
-      'GLBの中身または形式を確認してください。\n' +
-      'childCount: ' + counts.childCount + '\n' +
-      'meshCount: ' + counts.meshCount;
+      '元GLBのメッシュが0です。\n' +
+      'GLB形式または中身を確認してください。';
     return;
   }
 
-  // 一度GLB本体の位置・回転・スケールを仮リセット
-  modelEl.object3D.position.set(0, 0, 0);
-  modelEl.object3D.rotation.set(0, Math.PI, 0);
-  modelEl.object3D.scale.set(1, 1, 1);
+  const inverseRootMatrix = sourceRoot.matrixWorld.clone().invert();
 
-  obj.updateMatrixWorld(true);
+  const geometries = [];
+  const totalBox = new THREE.Box3();
+  let hasBox = false;
 
-  const box = new THREE.Box3().setFromObject(obj);
+  sourceRoot.traverse((node) => {
+    if (!node.isMesh || !node.geometry) return;
+
+    const positionAttr = node.geometry.attributes.position;
+    if (!positionAttr || positionAttr.count === 0) return;
+
+    const geom = node.geometry.clone();
+
+    // 元GLB内の階層・回転・スケールを焼き込む
+    const relativeMatrix = new THREE.Matrix4().multiplyMatrices(
+      inverseRootMatrix,
+      node.matrixWorld
+    );
+
+    geom.applyMatrix4(relativeMatrix);
+    geom.computeVertexNormals();
+    geom.computeBoundingBox();
+
+    if (geom.boundingBox) {
+      totalBox.union(geom.boundingBox);
+      hasBox = true;
+    }
+
+    geometries.push(geom);
+  });
+
+  if (!hasBox || geometries.length === 0) {
+    statusEl.textContent =
+      'メッシュはありますが、頂点情報を取得できません。\n' +
+      'GLBの中身に頂点がない可能性があります。';
+    return;
+  }
+
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
 
-  box.getSize(size);
-  box.getCenter(center);
+  totalBox.getSize(size);
+  totalBox.getCenter(center);
 
   boxSizeText =
     size.x.toFixed(4) + ', ' +
@@ -405,65 +433,83 @@ function fitModelToView() {
 
   if (!isFinite(maxDim) || maxDim <= 0) {
     statusEl.textContent =
-      'メッシュはありますが、サイズ取得に失敗しました。\n' +
-      '手動表示に切り替えます。';
-
-    innerScale = 1.0;
-    modelEl.object3D.position.set(0, 0, 0);
-    modelEl.object3D.scale.set(1, 1, 1);
+      'モデルサイズの計算に失敗しました。\n' +
+      'box size: ' + boxSizeText;
     return;
   }
 
-  // まずはかなり大きめに見える設定
   const desiredSize = 0.75;
   innerScale = desiredSize / maxDim;
-  innerScale = Math.max(0.001, Math.min(80, innerScale));
+  innerScale = Math.max(0.001, Math.min(200, innerScale));
 
-  // モデル中心を親エンティティの原点へ寄せる
-  modelEl.object3D.position.set(
-    -center.x * innerScale,
-    -center.y * innerScale,
-    -center.z * innerScale
-  );
+  proxyGroup = new THREE.Group();
+  proxyGroup.name = 'shiomi_proxy_group';
 
-  modelEl.object3D.scale.set(innerScale, innerScale, innerScale);
+  const greenMaterial = new THREE.MeshBasicMaterial({
+    color: 0x00ff00,
+    side: THREE.DoubleSide,
+    transparent: false,
+    opacity: 1.0,
+    depthTest: false,
+    depthWrite: false
+  });
 
-  // 親は赤い四角の少し手前に固定
+  geometries.forEach((geom) => {
+    // 中心補正とスケールをジオメトリ自体に焼き込む
+    geom.translate(-center.x, -center.y, -center.z);
+    geom.scale(innerScale, innerScale, innerScale);
+
+    const mesh = new THREE.Mesh(geom, greenMaterial.clone());
+    mesh.visible = true;
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 999;
+
+    proxyGroup.add(mesh);
+  });
+
+  proxyMeshCount = proxyGroup.children.length;
+
+  // いったん見えやすい角度にする
+  proxyGroup.rotation.set(0, Math.PI, 0);
+  proxyGroup.position.set(0, 0, 0);
+  proxyGroup.scale.set(1, 1, 1);
+
+  modelRoot.object3D.add(proxyGroup);
+
+  // 元GLBは非表示にして、抽出モデルだけ表示
+  originalEl.object3D.visible = false;
+  modelRoot.object3D.visible = true;
+
   currentX = 0.0;
   currentY = 0.0;
   currentZ = 0.22;
   rootScale = 1.0;
 
-  modelRoot.object3D.position.set(currentX, currentY, currentZ);
-  modelRoot.object3D.scale.set(rootScale, rootScale, rootScale);
-
-  modelBounds.object3D.position.set(currentX, currentY, currentZ);
-  modelBounds.object3D.scale.set(rootScale, rootScale, rootScale);
+  applyRootTransform(false);
 
   statusEl.textContent =
-    'GLBを蛍光グリーンで強制表示しました。\n' +
-    '赤い箱＝AR基準点\n' +
-    '水色ワイヤー箱＝モデル表示予定範囲\n' +
-    'meshCount: ' + counts.meshCount + '\n' +
-    'visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
+    'GLBメッシュを抽出して蛍光グリーンで再表示しました。\n' +
+    '水色ワイヤー箱の中を確認してください。\n' +
+    'source meshCount: ' + counts.meshCount + '\n' +
+    'proxyMeshCount: ' + proxyMeshCount + '\n' +
     'box size: ' + boxSizeText + '\n' +
     'box center: ' + boxCenterText + '\n' +
     'innerScale: ' + innerScale.toFixed(4);
 }
 
-modelEl.addEventListener('model-loaded', () => {
+originalEl.addEventListener('model-loaded', () => {
   modelLoaded = true;
 
   statusEl.textContent =
     'GLB読み込みイベントが発生しました。\n' +
-    'メッシュと表示位置を調整しています。';
+    'メッシュ抽出を実行しています。';
 
   setTimeout(() => {
-    fitModelToView();
+    extractMeshesToProxy();
   }, 500);
 });
 
-modelEl.addEventListener('model-error', (e) => {
+originalEl.addEventListener('model-error', (e) => {
   console.error('model-error', e);
 
   modelLoaded = false;
@@ -476,20 +522,23 @@ modelEl.addEventListener('model-error', (e) => {
     '3. GLBファイルが壊れていないか';
 });
 
-function applyRootTransform() {
+function applyRootTransform(showMessage = true) {
   modelRoot.object3D.position.set(currentX, currentY, currentZ);
   modelRoot.object3D.scale.set(rootScale, rootScale, rootScale);
 
   modelBounds.object3D.position.set(currentX, currentY, currentZ);
   modelBounds.object3D.scale.set(rootScale, rootScale, rootScale);
 
-  statusEl.textContent =
-    '表示調整中です。\n' +
-    'rootScale: ' + rootScale.toFixed(3) + '\n' +
-    'X: ' + currentX.toFixed(3) + '\n' +
-    'Y: ' + currentY.toFixed(3) + '\n' +
-    'Z: ' + currentZ.toFixed(3) + '\n' +
-    'innerScale: ' + innerScale.toFixed(4);
+  if (showMessage) {
+    statusEl.textContent =
+      '表示調整中です。\n' +
+      'rootScale: ' + rootScale.toFixed(3) + '\n' +
+      'X: ' + currentX.toFixed(3) + '\n' +
+      'Y: ' + currentY.toFixed(3) + '\n' +
+      'Z: ' + currentZ.toFixed(3) + '\n' +
+      'innerScale: ' + innerScale.toFixed(4) + '\n' +
+      'proxyMeshCount: ' + proxyMeshCount;
+  }
 }
 
 largerBtn.addEventListener('click', () => {
@@ -522,19 +571,17 @@ downBtn.addEventListener('click', () => {
   applyRootTransform();
 });
 
+extractBtn.addEventListener('click', () => {
+  extractMeshesToProxy();
+});
+
 resetBtn.addEventListener('click', () => {
   rootScale = 1.0;
   currentX = 0.0;
   currentY = 0.0;
   currentZ = 0.22;
 
-  modelRoot.object3D.position.set(currentX, currentY, currentZ);
-  modelRoot.object3D.scale.set(1, 1, 1);
-
-  modelBounds.object3D.position.set(currentX, currentY, currentZ);
-  modelBounds.object3D.scale.set(1, 1, 1);
-
-  fitModelToView();
+  extractMeshesToProxy();
 
   statusEl.textContent += '\n表示リセットを実行しました。';
 });
@@ -547,14 +594,15 @@ markerEl.addEventListener('targetFound', () => {
   modelRoot.setAttribute('visible', 'true');
   modelBounds.setAttribute('visible', 'true');
 
-  const counts = countMeshes();
+  const counts = countSourceMeshes();
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    '赤い箱・水色ワイヤー箱・蛍光グリーンモデルを確認してください。\n' +
-    'meshCount: ' + counts.meshCount + '\n' +
-    'visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
-    '見えない場合は「表示リセット」「＋」「前へ」を押してください。';
+    '赤い箱・水色ワイヤー箱・蛍光グリーン抽出モデルを確認してください。\n' +
+    'source meshCount: ' + counts.meshCount + '\n' +
+    'visibleSourceMeshCount: ' + counts.visibleMeshCount + '\n' +
+    'proxyMeshCount: ' + proxyMeshCount + '\n' +
+    '見えない場合は「メッシュ抽出」「表示リセット」「＋」「前へ」を押してください。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
@@ -651,16 +699,13 @@ stopBtn.addEventListener('click', () => {
 
 checkBtn.addEventListener('click', () => {
   const mindar = sceneEl.systems['mindar-image-system'];
-  const counts = countMeshes();
+  const counts = countSourceMeshes();
 
-  const THREE = AFRAME.THREE;
-  const obj = modelEl.object3D;
-  const box = new THREE.Box3().setFromObject(obj);
-  const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
+  let proxyChildren = 0;
 
-  box.getSize(size);
-  box.getCenter(center);
+  if (proxyGroup) {
+    proxyChildren = proxyGroup.children.length;
+  }
 
   statusEl.textContent =
     '状態確認\n' +
@@ -668,22 +713,19 @@ checkBtn.addEventListener('click', () => {
     'sceneLoaded: ' + sceneLoaded + '\n' +
     'MindAR: ' + Boolean(mindar) + '\n' +
     'modelLoaded: ' + modelLoaded + '\n' +
-    'childCount: ' + counts.childCount + '\n' +
-    'meshCount: ' + counts.meshCount + '\n' +
-    'visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
+    'source childCount: ' + counts.childCount + '\n' +
+    'source meshCount: ' + counts.meshCount + '\n' +
+    'source visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
+    'proxyGroup: ' + Boolean(proxyGroup) + '\n' +
+    'proxyMeshCount: ' + proxyMeshCount + '\n' +
+    'proxyChildren: ' + proxyChildren + '\n' +
     'rootScale: ' + rootScale.toFixed(3) + '\n' +
     'innerScale: ' + innerScale.toFixed(4) + '\n' +
     'X: ' + currentX.toFixed(3) + '\n' +
     'Y: ' + currentY.toFixed(3) + '\n' +
     'Z: ' + currentZ.toFixed(3) + '\n' +
-    'box size: ' +
-      size.x.toFixed(4) + ', ' +
-      size.y.toFixed(4) + ', ' +
-      size.z.toFixed(4) + '\n' +
-    'box center: ' +
-      center.x.toFixed(4) + ', ' +
-      center.y.toFixed(4) + ', ' +
-      center.z.toFixed(4);
+    'box size: ' + boxSizeText + '\n' +
+    'box center: ' + boxCenterText;
 });
 </script>
 
