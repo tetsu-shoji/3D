@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR レイヤー高さ手動補正版</title>
+<title>潮見ジオラマ AR 高さ分割レイヤー版</title>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
@@ -84,6 +84,7 @@ button:active {
 
 #startBtn { background: #c40000; color: #fff; }
 #stopBtn { background: #333; color: #fff; }
+
 #resetBtn { background: #005bd3; color: #fff; }
 #colorBtn { background: #ff9800; color: #fff; }
 #rotateBtn { background: #673ab7; color: #fff; }
@@ -95,6 +96,7 @@ button:active {
 #buildingUpBtn, #buildingDownBtn { background: #eeeeee; color: #111; }
 #roadUpBtn, #roadDownBtn { background: #ffd54f; color: #111; }
 #landUpBtn, #landDownBtn { background: #81c784; color: #111; }
+#splitUpBtn, #splitDownBtn { background: #ce93d8; color: #111; }
 
 #status {
   position: fixed;
@@ -102,7 +104,7 @@ button:active {
   right: 12px;
   bottom: 16px;
   color: #fff;
-  background: rgba(0,0,0,0.82);
+  background: rgba(0,0,0,0.84);
   border-radius: 14px;
   padding: 10px 12px;
   font-size: 13px;
@@ -174,6 +176,9 @@ button:active {
     <button id="roadDownBtn">道路↓</button>
     <button id="landUpBtn">土地↑</button>
     <button id="landDownBtn">土地↓</button>
+
+    <button id="splitDownBtn">建物判定－</button>
+    <button id="splitUpBtn">建物判定＋</button>
     <button id="heightResetBtn">高さリセット</button>
 
     <button id="rotateBtn">180度回転</button>
@@ -282,6 +287,9 @@ const roadUpBtn = document.querySelector('#roadUpBtn');
 const roadDownBtn = document.querySelector('#roadDownBtn');
 const landUpBtn = document.querySelector('#landUpBtn');
 const landDownBtn = document.querySelector('#landDownBtn');
+
+const splitUpBtn = document.querySelector('#splitUpBtn');
+const splitDownBtn = document.querySelector('#splitDownBtn');
 const heightResetBtn = document.querySelector('#heightResetBtn');
 
 const rotateBtn = document.querySelector('#rotateBtn');
@@ -321,12 +329,12 @@ let swapRoadBuilding = false;
 let baseFlipXDeg = 180;
 
 /*
-  レイヤーごとの高さ補正値。
-  ここをボタンで動かします。
-  land: 土地の上面位置
-  road: 道路の高さ
-  building: 建物の底面高さ
+  最大メッシュを高さで分割するしきい値。
+  小さいほど、建物として抽出される範囲が広がる。
+  大きいほど、建物として抽出される範囲が狭くなる。
 */
+let buildingSplitRatio = 0.18;
+
 let layerHeightOffset = {
   land: -0.006,
   road: 0.070,
@@ -501,26 +509,119 @@ function getLayerType(index, item) {
     return 'land';
   }
 
-  // 大きい順に並べている前提
+  // 最大メッシュは土地＋建物として高さ分割するため、ここではland扱い
   if (index === 0) return 'land';
 
+  // それ以外は原則道路扱い
   if (!swapRoadBuilding) {
-    if (index === 1) return 'building';
-    if (index === 2) return 'road';
+    return 'road';
   } else {
-    if (index === 1) return 'road';
-    if (index === 2) return 'building';
+    return 'building';
   }
-
-  return 'other';
 }
 
 /*
-  レイヤーごとに高さを揃える。
-  土地：上面を layerHeightOffset.land へ
-  道路：下面を layerHeightOffset.road へ
-  建物：下面を layerHeightOffset.building へ
+  最大メッシュを高さで土地・建物に分割する。
+  low: 土地
+  high: 建物
 */
+function splitGeometryByHeight(sourceGeom, thresholdRatio) {
+  const THREE = AFRAME.THREE;
+
+  const geom = sourceGeom.clone();
+  geom.computeBoundingBox();
+
+  if (!geom.boundingBox) {
+    return {
+      low: geom,
+      high: null
+    };
+  }
+
+  const box = geom.boundingBox;
+  const minZ = box.min.z;
+  const maxZ = box.max.z;
+  const thresholdZ = minZ + (maxZ - minZ) * thresholdRatio;
+
+  const pos = geom.attributes.position;
+  const indexAttr = geom.index;
+
+  const lowPositions = [];
+  const highPositions = [];
+
+  function pushTriangle(target, ax, ay, az, bx, by, bz, cx, cy, cz) {
+    target.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+  }
+
+  if (indexAttr) {
+    for (let i = 0; i < indexAttr.count; i += 3) {
+      const ia = indexAttr.getX(i);
+      const ib = indexAttr.getX(i + 1);
+      const ic = indexAttr.getX(i + 2);
+
+      const ax = pos.getX(ia);
+      const ay = pos.getY(ia);
+      const az = pos.getZ(ia);
+
+      const bx = pos.getX(ib);
+      const by = pos.getY(ib);
+      const bz = pos.getZ(ib);
+
+      const cx = pos.getX(ic);
+      const cy = pos.getY(ic);
+      const cz = pos.getZ(ic);
+
+      const avgZ = (az + bz + cz) / 3;
+
+      if (avgZ >= thresholdZ) {
+        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      } else {
+        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      }
+    }
+  } else {
+    for (let i = 0; i < pos.count; i += 3) {
+      const ax = pos.getX(i);
+      const ay = pos.getY(i);
+      const az = pos.getZ(i);
+
+      const bx = pos.getX(i + 1);
+      const by = pos.getY(i + 1);
+      const bz = pos.getZ(i + 1);
+
+      const cx = pos.getX(i + 2);
+      const cy = pos.getY(i + 2);
+      const cz = pos.getZ(i + 2);
+
+      const avgZ = (az + bz + cz) / 3;
+
+      if (avgZ >= thresholdZ) {
+        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      } else {
+        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      }
+    }
+  }
+
+  function buildGeometry(positions) {
+    if (positions.length === 0) return null;
+
+    const g = new THREE.BufferGeometry();
+    g.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
+    g.computeVertexNormals();
+    g.computeBoundingBox();
+    return g;
+  }
+
+  return {
+    low: buildGeometry(lowPositions),
+    high: buildGeometry(highPositions)
+  };
+}
+
 function normalizeLayerHeight(geom, layerType) {
   geom.computeBoundingBox();
 
@@ -583,6 +684,25 @@ function makeSolidMaterialForLayer(colorValue, layerType) {
     polygonOffsetFactor: polygonOffsetFactor,
     polygonOffsetUnits: polygonOffsetUnits
   });
+}
+
+function addLayerMesh(geom, layerType) {
+  const THREE = AFRAME.THREE;
+  const colors = colorSets[colorMode % colorSets.length];
+
+  let colorValue = colors.other;
+  if (layerType === 'land') colorValue = colors.land;
+  if (layerType === 'building') colorValue = colors.building;
+  if (layerType === 'road') colorValue = colors.road;
+
+  const material = makeSolidMaterialForLayer(colorValue, layerType);
+
+  const mesh = new THREE.Mesh(geom, material);
+  mesh.visible = true;
+  mesh.frustumCulled = false;
+  mesh.renderOrder = getLayerRenderOrder(layerType);
+
+  proxyGroup.add(mesh);
 }
 
 function updateProxyRotation() {
@@ -659,6 +779,7 @@ function extractMeshesToProxy(preserveTransform = true) {
     return;
   }
 
+  // 大きい順。最大メッシュを土地＋建物として分割する。
   items.sort((a, b) => b.volume - a.volume);
 
   const size = new THREE.Vector3();
@@ -693,34 +814,34 @@ function extractMeshesToProxy(preserveTransform = true) {
   proxyGroup = new THREE.Group();
   proxyGroup.name = 'shiomi_proxy_group';
 
-  const colors = colorSets[colorMode % colorSets.length];
-
   items.forEach((item, index) => {
-    const geom = item.geometry;
-    const layerType = getLayerType(index, item);
+    const baseGeom = item.geometry;
 
     // 中心補正
-    geom.translate(-center.x, -center.y, -center.z);
+    baseGeom.translate(-center.x, -center.y, -center.z);
 
     // スケール
-    geom.scale(innerScale, innerScale, innerScale);
+    baseGeom.scale(innerScale, innerScale, innerScale);
 
-    // レイヤーごとの高さ補正
-    normalizeLayerHeight(geom, layerType);
+    if (index === 0) {
+      // 最大メッシュは土地＋建物なので、高さで分割
+      const split = splitGeometryByHeight(baseGeom, buildingSplitRatio);
 
-    let colorValue = colors.other;
-    if (layerType === 'land') colorValue = colors.land;
-    if (layerType === 'building') colorValue = colors.building;
-    if (layerType === 'road') colorValue = colors.road;
+      if (split.low) {
+        normalizeLayerHeight(split.low, 'land');
+        addLayerMesh(split.low, 'land');
+      }
 
-    const material = makeSolidMaterialForLayer(colorValue, layerType);
-
-    const mesh = new THREE.Mesh(geom, material);
-    mesh.visible = true;
-    mesh.frustumCulled = false;
-    mesh.renderOrder = getLayerRenderOrder(layerType);
-
-    proxyGroup.add(mesh);
+      if (split.high) {
+        normalizeLayerHeight(split.high, 'building');
+        addLayerMesh(split.high, 'building');
+      }
+    } else {
+      // それ以外は道路扱い
+      const layerType = swapRoadBuilding ? 'building' : 'road';
+      normalizeLayerHeight(baseGeom, layerType);
+      addLayerMesh(baseGeom, layerType);
+    }
   });
 
   proxyMeshCount = proxyGroup.children.length;
@@ -744,9 +865,10 @@ function extractMeshesToProxy(preserveTransform = true) {
   applyRootTransform(false);
 
   statusEl.textContent =
-    'ソリッド表示で更新しました。\n' +
-    '土地・道路・建物の高さを個別補正しています。\n' +
-    '建物が低い場合は「建物↑」、道路が低い場合は「道路↑」を押してください。\n' +
+    '高さ分割レイヤー表示に更新しました。\n' +
+    '最大メッシュを土地＋建物として高さで分割しています。\n' +
+    '建物が少ない場合は「建物判定－」、土地に建物色が混ざる場合は「建物判定＋」を押してください。\n' +
+    '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
     '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
     '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
     '建物: ' + layerHeightOffset.building.toFixed(3) + '\n' +
@@ -758,7 +880,7 @@ originalEl.addEventListener('model-loaded', () => {
 
   statusEl.textContent =
     'GLBを読み込みました。\n' +
-    '自動でメッシュ抽出して表示します。';
+    '自動で高さ分割メッシュを生成します。';
 
   setTimeout(() => {
     extractMeshesToProxy(false);
@@ -793,6 +915,7 @@ function applyRootTransform(showMessage = true) {
       'Y: ' + currentY.toFixed(3) + '\n' +
       'Z: ' + currentZ.toFixed(3) + '\n' +
       '角度: ' + angleModes[angleMode].name + '\n' +
+      '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
       '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
       '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
       '建物: ' + layerHeightOffset.building.toFixed(3);
@@ -802,12 +925,12 @@ function applyRootTransform(showMessage = true) {
 function adjustLayerHeight(layer, delta) {
   layerHeightOffset[layer] += delta;
 
-  statusEl.textContent =
-    layer + ' の高さを調整しました。\n' +
-    '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
-    '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
-    '建物: ' + layerHeightOffset.building.toFixed(3);
+  extractMeshesToProxy(true);
+}
 
+function adjustBuildingSplit(delta) {
+  buildingSplitRatio += delta;
+  buildingSplitRatio = Math.max(0.02, Math.min(0.80, buildingSplitRatio));
   extractMeshesToProxy(true);
 }
 
@@ -865,6 +988,16 @@ landDownBtn.addEventListener('click', () => {
   adjustLayerHeight('land', -0.015);
 });
 
+splitDownBtn.addEventListener('click', () => {
+  // しきい値を下げると建物として抽出される面が増える
+  adjustBuildingSplit(-0.03);
+});
+
+splitUpBtn.addEventListener('click', () => {
+  // しきい値を上げると建物として抽出される面が減る
+  adjustBuildingSplit(0.03);
+});
+
 heightResetBtn.addEventListener('click', () => {
   layerHeightOffset = {
     land: defaultLayerHeightOffset.land,
@@ -873,13 +1006,9 @@ heightResetBtn.addEventListener('click', () => {
     other: defaultLayerHeightOffset.other
   };
 
-  extractMeshesToProxy(true);
+  buildingSplitRatio = 0.18;
 
-  statusEl.textContent =
-    'レイヤー高さを初期値に戻しました。\n' +
-    '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
-    '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
-    '建物: ' + layerHeightOffset.building.toFixed(3);
+  extractMeshesToProxy(true);
 });
 
 rotateBtn.addEventListener('click', () => {
@@ -911,10 +1040,6 @@ angleBtn.addEventListener('click', () => {
 colorBtn.addEventListener('click', () => {
   colorMode = (colorMode + 1) % colorSets.length;
   extractMeshesToProxy(true);
-
-  statusEl.textContent +=
-    '\n色を切り替えました。\n' +
-    'colorMode: ' + colorMode;
 });
 
 swapBtn.addEventListener('click', () => {
@@ -932,6 +1057,7 @@ resetBtn.addEventListener('click', () => {
   yawMode = 0;
   angleMode = 0;
   baseFlipXDeg = 180;
+  buildingSplitRatio = 0.18;
 
   layerHeightOffset = {
     land: defaultLayerHeightOffset.land,
@@ -948,8 +1074,8 @@ resetBtn.addEventListener('click', () => {
 
   statusEl.textContent =
     '表示リセットしました。\n' +
-    '土地・道路・建物の高さも初期値に戻しました。\n' +
-    '建物が低い場合は「建物↑」で調整してください。';
+    '最大メッシュを高さで土地・建物に分割しています。\n' +
+    '建物が少ない場合は「建物判定－」を押してください。';
 });
 
 markerEl.addEventListener('targetFound', () => {
@@ -966,8 +1092,8 @@ markerEl.addEventListener('targetFound', () => {
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    '土地形状が正常で、建物が低い場合は「建物↑」を押してください。\n' +
-    '道路が隠れる場合は「道路↑」を押してください。';
+    '最大メッシュを高さで土地・建物に分割しています。\n' +
+    '建物が出ない場合は「建物判定－」、建物高さが低い場合は「建物↑」を押してください。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
@@ -1089,6 +1215,7 @@ checkBtn.addEventListener('click', () => {
     'Y: ' + currentY.toFixed(3) + '\n' +
     'Z: ' + currentZ.toFixed(3) + '\n' +
     '角度: ' + angleModes[angleMode].name + '\n' +
+    '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
     '土地高さ: ' + layerHeightOffset.land.toFixed(3) + '\n' +
     '道路高さ: ' + layerHeightOffset.road.toFixed(3) + '\n' +
     '建物高さ: ' + layerHeightOffset.building.toFixed(3) + '\n' +
