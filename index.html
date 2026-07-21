@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR X軸180度・80度表示版</title>
+<title>潮見ジオラマ AR レイヤー高さ手動補正版</title>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
@@ -70,8 +70,8 @@ a-scene {
 button {
   border: none;
   border-radius: 999px;
-  padding: 10px 14px;
-  font-size: 14px;
+  padding: 9px 12px;
+  font-size: 13px;
   font-weight: 700;
   color: #111;
   background: rgba(255,255,255,0.94);
@@ -89,7 +89,12 @@ button:active {
 #rotateBtn { background: #673ab7; color: #fff; }
 #angleBtn { background: #009688; color: #fff; }
 #swapBtn { background: #795548; color: #fff; }
+#heightResetBtn { background: #607d8b; color: #fff; }
 #checkBtn { background: #00a36c; color: #fff; }
+
+#buildingUpBtn, #buildingDownBtn { background: #eeeeee; color: #111; }
+#roadUpBtn, #roadDownBtn { background: #ffd54f; color: #111; }
+#landUpBtn, #landDownBtn { background: #81c784; color: #111; }
 
 #status {
   position: fixed;
@@ -97,7 +102,7 @@ button:active {
   right: 12px;
   bottom: 16px;
   color: #fff;
-  background: rgba(0,0,0,0.80);
+  background: rgba(0,0,0,0.82);
   border-radius: 14px;
   padding: 10px 12px;
   font-size: 13px;
@@ -155,12 +160,22 @@ button:active {
   <div id="topPanel">
     <button id="startBtn">開始</button>
     <button id="stopBtn">停止</button>
+
     <button id="largerBtn">＋</button>
     <button id="smallerBtn">－</button>
     <button id="frontBtn">前へ</button>
     <button id="backBtn">奥へ</button>
-    <button id="upBtn">上へ</button>
-    <button id="downBtn">下へ</button>
+    <button id="upBtn">全体上へ</button>
+    <button id="downBtn">全体下へ</button>
+
+    <button id="buildingUpBtn">建物↑</button>
+    <button id="buildingDownBtn">建物↓</button>
+    <button id="roadUpBtn">道路↑</button>
+    <button id="roadDownBtn">道路↓</button>
+    <button id="landUpBtn">土地↑</button>
+    <button id="landDownBtn">土地↓</button>
+    <button id="heightResetBtn">高さリセット</button>
+
     <button id="rotateBtn">180度回転</button>
     <button id="angleBtn">角度切替</button>
     <button id="colorBtn">色切替</button>
@@ -253,12 +268,22 @@ const debugBox = document.querySelector('#debugBox');
 
 const startBtn = document.querySelector('#startBtn');
 const stopBtn = document.querySelector('#stopBtn');
+
 const largerBtn = document.querySelector('#largerBtn');
 const smallerBtn = document.querySelector('#smallerBtn');
 const frontBtn = document.querySelector('#frontBtn');
 const backBtn = document.querySelector('#backBtn');
 const upBtn = document.querySelector('#upBtn');
 const downBtn = document.querySelector('#downBtn');
+
+const buildingUpBtn = document.querySelector('#buildingUpBtn');
+const buildingDownBtn = document.querySelector('#buildingDownBtn');
+const roadUpBtn = document.querySelector('#roadUpBtn');
+const roadDownBtn = document.querySelector('#roadDownBtn');
+const landUpBtn = document.querySelector('#landUpBtn');
+const landDownBtn = document.querySelector('#landDownBtn');
+const heightResetBtn = document.querySelector('#heightResetBtn');
+
 const rotateBtn = document.querySelector('#rotateBtn');
 const angleBtn = document.querySelector('#angleBtn');
 const colorBtn = document.querySelector('#colorBtn');
@@ -293,12 +318,28 @@ let yawMode = 0;
 let angleMode = 0;
 let swapRoadBuilding = false;
 
-/*
-  重要：
-  地面の裏側を見ている向きのため、
-  モデル全体をX軸で180度反転してから表示角度を加える。
-*/
 let baseFlipXDeg = 180;
+
+/*
+  レイヤーごとの高さ補正値。
+  ここをボタンで動かします。
+  land: 土地の上面位置
+  road: 道路の高さ
+  building: 建物の底面高さ
+*/
+let layerHeightOffset = {
+  land: -0.006,
+  road: 0.070,
+  building: 0.120,
+  other: 0.030
+};
+
+const defaultLayerHeightOffset = {
+  land: -0.006,
+  road: 0.070,
+  building: 0.120,
+  other: 0.030
+};
 
 const colorSets = [
   {
@@ -321,10 +362,6 @@ const colorSets = [
   }
 ];
 
-/*
-  初期角度は80度表示。
-  ユーザー確認より、この角度が地面の表側に近い想定。
-*/
 const angleModes = [
   {
     name: '80度表示',
@@ -415,10 +452,6 @@ function getGeometryVolume(geom) {
   return Math.abs(size.x * size.y * size.z);
 }
 
-/*
-  モデルの頂点座標は入れ替えない。
-  レイヤー高さ正規化と、モデル全体のX軸180度反転で向きを整える。
-*/
 function remapYUpToARZUp(geom) {
   const position = geom.attributes.position;
   if (!position) return;
@@ -483,8 +516,10 @@ function getLayerType(index, item) {
 }
 
 /*
-  土地・道路・建物をレイヤーごとに高さ正規化。
-  この処理で、建物が地面下へぶら下がる状態を避ける。
+  レイヤーごとに高さを揃える。
+  土地：上面を layerHeightOffset.land へ
+  道路：下面を layerHeightOffset.road へ
+  建物：下面を layerHeightOffset.building へ
 */
 function normalizeLayerHeight(geom, layerType) {
   geom.computeBoundingBox();
@@ -496,24 +531,21 @@ function normalizeLayerHeight(geom, layerType) {
   const maxZ = box.max.z;
 
   if (layerType === 'land') {
-    // 土地の上面を z=0 の少し下へ
-    geom.translate(0, 0, -maxZ - 0.006);
+    geom.translate(0, 0, -maxZ + layerHeightOffset.land);
     return;
   }
 
   if (layerType === 'road') {
-    // 道路の下面を土地より少し上へ
-    geom.translate(0, 0, -minZ + 0.050);
+    geom.translate(0, 0, -minZ + layerHeightOffset.road);
     return;
   }
 
   if (layerType === 'building') {
-    // 建物の底面を土地より上へ
-    geom.translate(0, 0, -minZ + 0.020);
+    geom.translate(0, 0, -minZ + layerHeightOffset.building);
     return;
   }
 
-  geom.translate(0, 0, -minZ + 0.015);
+  geom.translate(0, 0, -minZ + layerHeightOffset.other);
 }
 
 function getLayerRenderOrder(layerType) {
@@ -540,10 +572,6 @@ function makeSolidMaterialForLayer(colorValue, layerType) {
     polygonOffsetUnits = 3;
   }
 
-  /*
-    MeshBasicMaterial：
-    光や法線の影響を受けにくくし、裏側っぽい暗さを抑える。
-  */
   return new THREE.MeshBasicMaterial({
     color: colorValue,
     side: THREE.DoubleSide,
@@ -563,21 +591,14 @@ function updateProxyRotation() {
   const THREE = AFRAME.THREE;
 
   const pitchDeg = angleModes[angleMode].pitchDeg;
-
-  /*
-    重要：
-    baseFlipXDeg = 180 でモデル全体の表裏を反転。
-    pitchDeg = 80 などで表示角度を調整。
-  */
   const totalPitch = THREE.MathUtils.degToRad(baseFlipXDeg + pitchDeg);
 
-  // 180度回転ボタンは地図面上の向き変更なのでZ軸回転
   const zYaw = yawMode % 2 === 0 ? 0 : Math.PI;
 
   proxyGroup.rotation.set(totalPitch, 0, zYaw);
 }
 
-function extractMeshesToProxy() {
+function extractMeshesToProxy(preserveTransform = true) {
   const THREE = AFRAME.THREE;
 
   clearProxyGroup();
@@ -614,8 +635,6 @@ function extractMeshesToProxy() {
     );
 
     geom.applyMatrix4(relativeMatrix);
-
-    // 座標は入れ替えない
     remapYUpToARZUp(geom);
 
     geom.computeVertexNormals();
@@ -678,7 +697,6 @@ function extractMeshesToProxy() {
 
   items.forEach((item, index) => {
     const geom = item.geometry;
-
     const layerType = getLayerType(index, item);
 
     // 中心補正
@@ -687,7 +705,7 @@ function extractMeshesToProxy() {
     // スケール
     geom.scale(innerScale, innerScale, innerScale);
 
-    // 土地・道路・建物をレイヤーごとに高さ正規化
+    // レイヤーごとの高さ補正
     normalizeLayerHeight(geom, layerType);
 
     let colorValue = colors.other;
@@ -715,25 +733,24 @@ function extractMeshesToProxy() {
   originalEl.object3D.visible = false;
   modelRoot.object3D.visible = true;
 
-  const mode = angleModes[angleMode];
-  currentY = mode.y;
-  currentZ = mode.z;
-
-  rootScale = 1.0;
+  if (!preserveTransform) {
+    const mode = angleModes[angleMode];
+    currentY = mode.y;
+    currentZ = mode.z;
+    rootScale = 1.0;
+  }
 
   updateProxyRotation();
   applyRootTransform(false);
 
   statusEl.textContent =
-    'ソリッド表示で自動表示しました。\n' +
-    '全レイヤーをX軸180度反転し、80度表示を初期角度にしています。\n' +
-    '土地・道路・建物はレイヤーごとに高さ補正しています。\n' +
-    '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
-    '角度: ' + angleModes[angleMode].name + '\n' +
-    '道路/建物入替: ' + (swapRoadBuilding ? '入替中' : '通常') + '\n' +
-    'source meshCount: ' + counts.meshCount + '\n' +
-    'proxyMeshCount: ' + proxyMeshCount + '\n' +
-    'innerScale: ' + innerScale.toFixed(4);
+    'ソリッド表示で更新しました。\n' +
+    '土地・道路・建物の高さを個別補正しています。\n' +
+    '建物が低い場合は「建物↑」、道路が低い場合は「道路↑」を押してください。\n' +
+    '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+    '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+    '建物: ' + layerHeightOffset.building.toFixed(3) + '\n' +
+    'proxyMeshCount: ' + proxyMeshCount;
 }
 
 originalEl.addEventListener('model-loaded', () => {
@@ -744,7 +761,7 @@ originalEl.addEventListener('model-loaded', () => {
     '自動でメッシュ抽出して表示します。';
 
   setTimeout(() => {
-    extractMeshesToProxy();
+    extractMeshesToProxy(false);
   }, 500);
 });
 
@@ -776,11 +793,22 @@ function applyRootTransform(showMessage = true) {
       'Y: ' + currentY.toFixed(3) + '\n' +
       'Z: ' + currentZ.toFixed(3) + '\n' +
       '角度: ' + angleModes[angleMode].name + '\n' +
-      'X軸反転: ' + baseFlipXDeg + '度\n' +
-      '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
-      '道路/建物入替: ' + (swapRoadBuilding ? '入替中' : '通常') + '\n' +
-      'proxyMeshCount: ' + proxyMeshCount;
+      '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+      '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+      '建物: ' + layerHeightOffset.building.toFixed(3);
   }
+}
+
+function adjustLayerHeight(layer, delta) {
+  layerHeightOffset[layer] += delta;
+
+  statusEl.textContent =
+    layer + ' の高さを調整しました。\n' +
+    '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+    '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+    '建物: ' + layerHeightOffset.building.toFixed(3);
+
+  extractMeshesToProxy(true);
 }
 
 largerBtn.addEventListener('click', () => {
@@ -813,6 +841,47 @@ downBtn.addEventListener('click', () => {
   applyRootTransform();
 });
 
+buildingUpBtn.addEventListener('click', () => {
+  adjustLayerHeight('building', 0.020);
+});
+
+buildingDownBtn.addEventListener('click', () => {
+  adjustLayerHeight('building', -0.020);
+});
+
+roadUpBtn.addEventListener('click', () => {
+  adjustLayerHeight('road', 0.015);
+});
+
+roadDownBtn.addEventListener('click', () => {
+  adjustLayerHeight('road', -0.015);
+});
+
+landUpBtn.addEventListener('click', () => {
+  adjustLayerHeight('land', 0.015);
+});
+
+landDownBtn.addEventListener('click', () => {
+  adjustLayerHeight('land', -0.015);
+});
+
+heightResetBtn.addEventListener('click', () => {
+  layerHeightOffset = {
+    land: defaultLayerHeightOffset.land,
+    road: defaultLayerHeightOffset.road,
+    building: defaultLayerHeightOffset.building,
+    other: defaultLayerHeightOffset.other
+  };
+
+  extractMeshesToProxy(true);
+
+  statusEl.textContent =
+    'レイヤー高さを初期値に戻しました。\n' +
+    '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+    '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+    '建物: ' + layerHeightOffset.building.toFixed(3);
+});
+
 rotateBtn.addEventListener('click', () => {
   yawMode = (yawMode + 1) % 2;
   updateProxyRotation();
@@ -820,7 +889,6 @@ rotateBtn.addEventListener('click', () => {
 
   statusEl.textContent =
     'モデルをZ軸で180度回転しました。\n' +
-    '地面を裏返さず、地図の向きだけを変える回転です。\n' +
     '現在: ' + (yawMode % 2 === 0 ? '0度' : '180度');
 });
 
@@ -837,13 +905,12 @@ angleBtn.addEventListener('click', () => {
 
   statusEl.textContent =
     '角度を切り替えました。\n' +
-    '現在: ' + mode.name + '\n' +
-    'X軸180度反転をかけた状態で、表示角度だけ切り替えています。';
+    '現在: ' + mode.name;
 });
 
 colorBtn.addEventListener('click', () => {
   colorMode = (colorMode + 1) % colorSets.length;
-  extractMeshesToProxy();
+  extractMeshesToProxy(true);
 
   statusEl.textContent +=
     '\n色を切り替えました。\n' +
@@ -852,7 +919,7 @@ colorBtn.addEventListener('click', () => {
 
 swapBtn.addEventListener('click', () => {
   swapRoadBuilding = !swapRoadBuilding;
-  extractMeshesToProxy();
+  extractMeshesToProxy(true);
 
   statusEl.textContent +=
     '\n道路/建物の判定を入れ替えました。\n' +
@@ -866,16 +933,23 @@ resetBtn.addEventListener('click', () => {
   angleMode = 0;
   baseFlipXDeg = 180;
 
+  layerHeightOffset = {
+    land: defaultLayerHeightOffset.land,
+    road: defaultLayerHeightOffset.road,
+    building: defaultLayerHeightOffset.building,
+    other: defaultLayerHeightOffset.other
+  };
+
   const mode = angleModes[angleMode];
   currentY = mode.y;
   currentZ = mode.z;
 
-  extractMeshesToProxy();
+  extractMeshesToProxy(false);
 
   statusEl.textContent =
     '表示リセットしました。\n' +
-    '全レイヤーをX軸180度反転し、初期角度を80度表示にしています。\n' +
-    '地面の表側が見える向きになる想定です。';
+    '土地・道路・建物の高さも初期値に戻しました。\n' +
+    '建物が低い場合は「建物↑」で調整してください。';
 });
 
 markerEl.addEventListener('targetFound', () => {
@@ -887,13 +961,13 @@ markerEl.addEventListener('targetFound', () => {
   debugBox.setAttribute('visible', 'false');
 
   if (!proxyGroup && modelLoaded) {
-    extractMeshesToProxy();
+    extractMeshesToProxy(false);
   }
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    'X軸180度反転＋80度表示で表示しています。\n' +
-    '向きが逆の場合は「180度回転」、道路/建物が逆の場合は「道路/建物入替」を押してください。';
+    '土地形状が正常で、建物が低い場合は「建物↑」を押してください。\n' +
+    '道路が隠れる場合は「道路↑」を押してください。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
@@ -1015,7 +1089,9 @@ checkBtn.addEventListener('click', () => {
     'Y: ' + currentY.toFixed(3) + '\n' +
     'Z: ' + currentZ.toFixed(3) + '\n' +
     '角度: ' + angleModes[angleMode].name + '\n' +
-    'X軸反転: ' + baseFlipXDeg + '度\n' +
+    '土地高さ: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+    '道路高さ: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+    '建物高さ: ' + layerHeightOffset.building.toFixed(3) + '\n' +
     '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
     '道路/建物入替: ' + (swapRoadBuilding ? '入替中' : '通常') + '\n' +
     'box size: ' + boxSizeText + '\n' +
