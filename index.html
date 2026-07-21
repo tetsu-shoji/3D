@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR 色分け表示版</title>
+<title>潮見ジオラマ AR ソリッド表示版</title>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
@@ -97,13 +97,18 @@ button:active {
   color: #fff;
 }
 
-#extractBtn {
-  background: #7b1fa2;
+#colorBtn {
+  background: #ff9800;
   color: #fff;
 }
 
-#colorBtn {
-  background: #ff9800;
+#rotateBtn {
+  background: #673ab7;
+  color: #fff;
+}
+
+#angleBtn {
+  background: #009688;
   color: #fff;
 }
 
@@ -182,7 +187,8 @@ button:active {
     <button id="backBtn">奥へ</button>
     <button id="upBtn">上へ</button>
     <button id="downBtn">下へ</button>
-    <button id="extractBtn">メッシュ抽出</button>
+    <button id="rotateBtn">180度回転</button>
+    <button id="angleBtn">角度切替</button>
     <button id="colorBtn">色切替</button>
     <button id="resetBtn">表示リセット</button>
     <button id="checkBtn">確認</button>
@@ -206,13 +212,14 @@ button:active {
 
   <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
 
-    <a-light type="ambient" intensity="2.4"></a-light>
+    <a-light type="ambient" intensity="2.6"></a-light>
     <a-light type="directional" intensity="2.8" position="0 1 2"></a-light>
     <a-light type="point" intensity="2.0" position="0 0 1"></a-light>
 
-    <!-- 赤い箱：AR基準点 -->
+    <!-- 確認用の赤箱。通常は非表示 -->
     <a-box
       id="debugBox"
+      visible="false"
       position="0 0 0.08"
       width="0.07"
       height="0.07"
@@ -220,26 +227,27 @@ button:active {
       color="#ff0000">
     </a-box>
 
-    <!-- 水色ワイヤー箱：モデル表示予定範囲 -->
+    <!-- 確認用フレーム。通常は非表示 -->
     <a-box
       id="modelBounds"
-      position="0 0 0.22"
+      visible="false"
+      position="0 0 0.24"
       width="0.8"
       height="0.8"
       depth="0.8"
-      material="color: #00ffff; wireframe: true; transparent: true; opacity: 0.65;">
+      material="color: #00ffff; wireframe: true; transparent: true; opacity: 0.6;">
     </a-box>
 
     <!-- 抽出モデル表示用 -->
     <a-entity
       id="modelRoot"
-      position="0 0 0.22"
+      position="0 0 0.24"
       rotation="0 0 0"
       scale="1 1 1"
       visible="true">
     </a-entity>
 
-    <!-- 元GLB。読み込み専用 -->
+    <!-- 元GLB。読み込み専用。表示はしない -->
     <a-entity
       id="shiomiOriginal"
       gltf-model="url(./shiomi_city.glb)"
@@ -267,6 +275,7 @@ const markerEl = document.querySelector('#markerTarget');
 const originalEl = document.querySelector('#shiomiOriginal');
 const modelRoot = document.querySelector('#modelRoot');
 const modelBounds = document.querySelector('#modelBounds');
+const debugBox = document.querySelector('#debugBox');
 
 const startBtn = document.querySelector('#startBtn');
 const stopBtn = document.querySelector('#stopBtn');
@@ -276,7 +285,8 @@ const frontBtn = document.querySelector('#frontBtn');
 const backBtn = document.querySelector('#backBtn');
 const upBtn = document.querySelector('#upBtn');
 const downBtn = document.querySelector('#downBtn');
-const extractBtn = document.querySelector('#extractBtn');
+const rotateBtn = document.querySelector('#rotateBtn');
+const angleBtn = document.querySelector('#angleBtn');
 const colorBtn = document.querySelector('#colorBtn');
 const resetBtn = document.querySelector('#resetBtn');
 const checkBtn = document.querySelector('#checkBtn');
@@ -292,7 +302,7 @@ let arStarted = false;
 let rootScale = 1.0;
 let currentX = 0.0;
 let currentY = 0.0;
-let currentZ = 0.22;
+let currentZ = 0.24;
 
 let proxyGroup = null;
 let proxyMeshCount = 0;
@@ -302,15 +312,39 @@ let childCount = 0;
 let innerScale = 1.0;
 let boxSizeText = '';
 let boxCenterText = '';
+
 let colorMode = 0;
+let yawMode = 1;      // 初期で180度回転
+let angleMode = 0;    // 0: 真上, 1: 斜め, 2: ローアングル
 
 const colorSets = [
-  // 通常：土地・建物・道路を想定
-  [0x2ecc71, 0xf5f5f5, 0xffc107, 0x4fc3f7, 0xff7043],
-  // 強調：非常に見えやすい配色
-  [0x00ff00, 0xff00ff, 0x00ffff, 0xffff00, 0xff0000],
-  // 落ち着いた配色
-  [0x6abf69, 0xd9d9d9, 0x8d6e63, 0x90caf9, 0xffcc80]
+  // 土地、建物、道路などの想定
+  [0x2ecc71, 0xf2f2f2, 0xf9c74f, 0x90caf9, 0xff8a65],
+  // 強調色
+  [0x00cc66, 0xffffff, 0xffcc00, 0x00bcd4, 0xff5722],
+  // 落ち着いた色
+  [0x6abf69, 0xd9d9d9, 0x8d6e63, 0x64b5f6, 0xffcc80]
+];
+
+const angleModes = [
+  {
+    name: '真上',
+    pitchDeg: 0,
+    z: 0.24,
+    y: 0.00
+  },
+  {
+    name: '斜め',
+    pitchDeg: -35,
+    z: 0.34,
+    y: 0.04
+  },
+  {
+    name: 'ローアングル',
+    pitchDeg: -62,
+    z: 0.48,
+    y: 0.08
+  }
 ];
 
 window.addEventListener('load', () => {
@@ -323,7 +357,7 @@ sceneEl.addEventListener('loaded', () => {
   sceneLoaded = true;
   statusEl.textContent =
     'A-Frameシーンを読み込みました。\n' +
-    '開始できます。';
+    'GLB読み込み後、自動で表示します。';
 });
 
 function countSourceMeshes() {
@@ -375,6 +409,37 @@ function getGeometryVolume(geom) {
   geom.boundingBox.getSize(size);
 
   return Math.abs(size.x * size.y * size.z);
+}
+
+function updateProxyRotation() {
+  if (!proxyGroup) return;
+
+  const THREE = AFRAME.THREE;
+
+  const pitchDeg = angleModes[angleMode].pitchDeg;
+  const pitch = THREE.MathUtils.degToRad(pitchDeg);
+
+  const yaw = yawMode % 2 === 0 ? 0 : Math.PI;
+
+  proxyGroup.rotation.set(pitch, yaw, 0);
+}
+
+function makeSolidMaterial(colorValue) {
+  const THREE = AFRAME.THREE;
+
+  return new THREE.MeshStandardMaterial({
+    color: colorValue,
+    side: THREE.DoubleSide,
+    roughness: 0.72,
+    metalness: 0.02,
+    transparent: false,
+    opacity: 1.0,
+    depthTest: true,
+    depthWrite: true,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1
+  });
 }
 
 function extractMeshesToProxy() {
@@ -436,7 +501,7 @@ function extractMeshesToProxy() {
     return;
   }
 
-  // 大きい順にする。最大メッシュを土地扱いにしやすくするため。
+  // 大きい順。最大メッシュを土地扱いにしやすくする。
   items.sort((a, b) => b.volume - a.volume);
 
   const size = new THREE.Vector3();
@@ -464,7 +529,7 @@ function extractMeshesToProxy() {
     return;
   }
 
-  const desiredSize = 0.75;
+  const desiredSize = 0.78;
   innerScale = desiredSize / maxDim;
   innerScale = Math.max(0.001, Math.min(200, innerScale));
 
@@ -476,48 +541,22 @@ function extractMeshesToProxy() {
   items.forEach((item, index) => {
     const geom = item.geometry;
 
-    // 中心補正とスケールをジオメトリ自体に焼き込む
+    // モデル中心補正とスケールをジオメトリに焼き込み
     geom.translate(-center.x, -center.y, -center.z);
     geom.scale(innerScale, innerScale, innerScale);
 
-    // メッシュごとに別色
-    const material = new THREE.MeshBasicMaterial({
-      color: colors[index % colors.length],
-      side: THREE.DoubleSide,
-      transparent: false,
-      opacity: 1.0,
-      depthTest: false,
-      depthWrite: false
-    });
+    const material = makeSolidMaterial(colors[index % colors.length]);
 
     const mesh = new THREE.Mesh(geom, material);
     mesh.visible = true;
     mesh.frustumCulled = false;
-    mesh.renderOrder = 900 + index;
+    mesh.renderOrder = index;
 
     proxyGroup.add(mesh);
-
-    // 黒い輪郭線
-    const edgeGeom = new THREE.EdgesGeometry(geom, 15);
-    const edgeMat = new THREE.LineBasicMaterial({
-      color: 0x000000,
-      transparent: false,
-      opacity: 1.0,
-      depthTest: false,
-      depthWrite: false
-    });
-
-    const edges = new THREE.LineSegments(edgeGeom, edgeMat);
-    edges.visible = true;
-    edges.frustumCulled = false;
-    edges.renderOrder = 1000 + index;
-
-    proxyGroup.add(edges);
   });
 
   proxyMeshCount = proxyGroup.children.length;
 
-  proxyGroup.rotation.set(0, Math.PI, 0);
   proxyGroup.position.set(0, 0, 0);
   proxyGroup.scale.set(1, 1, 1);
 
@@ -526,31 +565,32 @@ function extractMeshesToProxy() {
   originalEl.object3D.visible = false;
   modelRoot.object3D.visible = true;
 
-  currentX = 0.0;
-  currentY = 0.0;
-  currentZ = 0.22;
+  const mode = angleModes[angleMode];
+  currentY = mode.y;
+  currentZ = mode.z;
+
   rootScale = 1.0;
 
+  updateProxyRotation();
   applyRootTransform(false);
 
   statusEl.textContent =
-    'GLBメッシュを色分けして再表示しました。\n' +
-    '最大メッシュ＝緑系、他メッシュ＝建物・道路候補として色分けしています。\n' +
-    '黒い輪郭線も追加しました。\n' +
+    'ソリッド表示で自動表示しました。\n' +
+    '水色フレームと赤箱は非表示です。\n' +
+    '道路・建物・土地を色分けしています。\n' +
+    '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
+    '角度: ' + angleModes[angleMode].name + '\n' +
     'source meshCount: ' + counts.meshCount + '\n' +
-    'proxy children: ' + proxyMeshCount + '\n' +
-    'box size: ' + boxSizeText + '\n' +
-    'box center: ' + boxCenterText + '\n' +
-    'innerScale: ' + innerScale.toFixed(4) + '\n' +
-    'colorMode: ' + colorMode;
+    'proxyMeshCount: ' + proxyMeshCount + '\n' +
+    'innerScale: ' + innerScale.toFixed(4);
 }
 
 originalEl.addEventListener('model-loaded', () => {
   modelLoaded = true;
 
   statusEl.textContent =
-    'GLB読み込みイベントが発生しました。\n' +
-    'メッシュを色分け抽出しています。';
+    'GLBを読み込みました。\n' +
+    '自動でメッシュ抽出して表示します。';
 
   setTimeout(() => {
     extractMeshesToProxy();
@@ -584,59 +624,94 @@ function applyRootTransform(showMessage = true) {
       'X: ' + currentX.toFixed(3) + '\n' +
       'Y: ' + currentY.toFixed(3) + '\n' +
       'Z: ' + currentZ.toFixed(3) + '\n' +
-      'innerScale: ' + innerScale.toFixed(4) + '\n' +
-      'proxy children: ' + proxyMeshCount;
+      '角度: ' + angleModes[angleMode].name + '\n' +
+      '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
+      'proxyMeshCount: ' + proxyMeshCount;
   }
 }
 
 largerBtn.addEventListener('click', () => {
-  rootScale = Math.min(50, rootScale * 1.25);
+  rootScale = Math.min(50, rootScale * 1.20);
   applyRootTransform();
 });
 
 smallerBtn.addEventListener('click', () => {
-  rootScale = Math.max(0.001, rootScale / 1.25);
+  rootScale = Math.max(0.001, rootScale / 1.20);
   applyRootTransform();
 });
 
 frontBtn.addEventListener('click', () => {
-  currentZ += 0.10;
+  currentZ += 0.08;
   applyRootTransform();
 });
 
 backBtn.addEventListener('click', () => {
-  currentZ -= 0.10;
+  currentZ -= 0.08;
   applyRootTransform();
 });
 
 upBtn.addEventListener('click', () => {
-  currentY += 0.10;
+  currentY += 0.08;
   applyRootTransform();
 });
 
 downBtn.addEventListener('click', () => {
-  currentY -= 0.10;
+  currentY -= 0.08;
   applyRootTransform();
 });
 
-extractBtn.addEventListener('click', () => {
-  extractMeshesToProxy();
+rotateBtn.addEventListener('click', () => {
+  yawMode = (yawMode + 1) % 2;
+  updateProxyRotation();
+  applyRootTransform();
+
+  statusEl.textContent =
+    'モデルを180度回転しました。\n' +
+    '現在: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
+    '角度: ' + angleModes[angleMode].name;
+});
+
+angleBtn.addEventListener('click', () => {
+  angleMode = (angleMode + 1) % angleModes.length;
+
+  const mode = angleModes[angleMode];
+
+  currentY = mode.y;
+  currentZ = mode.z;
+
+  updateProxyRotation();
+  applyRootTransform();
+
+  statusEl.textContent =
+    '角度を切り替えました。\n' +
+    '現在: ' + mode.name + '\n' +
+    '消える場合は「前へ」「＋」を押してください。';
 });
 
 colorBtn.addEventListener('click', () => {
   colorMode = (colorMode + 1) % colorSets.length;
   extractMeshesToProxy();
+
+  statusEl.textContent +=
+    '\n色を切り替えました。\n' +
+    'colorMode: ' + colorMode;
 });
 
 resetBtn.addEventListener('click', () => {
   rootScale = 1.0;
   currentX = 0.0;
-  currentY = 0.0;
-  currentZ = 0.22;
+  angleMode = 0;
+  yawMode = 1;
+
+  const mode = angleModes[angleMode];
+  currentY = mode.y;
+  currentZ = mode.z;
 
   extractMeshesToProxy();
 
-  statusEl.textContent += '\n表示リセットを実行しました。';
+  statusEl.textContent =
+    '表示リセットしました。\n' +
+    '水色フレームなし、ソリッド表示、180度回転状態です。';
 });
 
 markerEl.addEventListener('targetFound', () => {
@@ -644,17 +719,16 @@ markerEl.addEventListener('targetFound', () => {
   foundBanner.style.display = 'block';
 
   modelRoot.setAttribute('visible', 'true');
-  modelBounds.setAttribute('visible', 'true');
 
-  const counts = countSourceMeshes();
+  // 念のため、まだ抽出されていない場合はここでも自動抽出
+  if (!proxyGroup && modelLoaded) {
+    extractMeshesToProxy();
+  }
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    '色分けモデルと黒い輪郭線を確認してください。\n' +
-    'source meshCount: ' + counts.meshCount + '\n' +
-    'visibleSourceMeshCount: ' + counts.visibleMeshCount + '\n' +
-    'proxy children: ' + proxyMeshCount + '\n' +
-    'つぶれて見える場合は「色切替」「＋」「前へ」を押してください。';
+    'ソリッド表示しています。\n' +
+    '角度変更は「角度切替」、向き変更は「180度回転」です。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
@@ -775,9 +849,10 @@ checkBtn.addEventListener('click', () => {
     'X: ' + currentX.toFixed(3) + '\n' +
     'Y: ' + currentY.toFixed(3) + '\n' +
     'Z: ' + currentZ.toFixed(3) + '\n' +
+    '角度: ' + angleModes[angleMode].name + '\n' +
+    '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
     'box size: ' + boxSizeText + '\n' +
-    'box center: ' + boxCenterText + '\n' +
-    'colorMode: ' + colorMode;
+    'box center: ' + boxCenterText;
 });
 </script>
 
