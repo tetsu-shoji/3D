@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR 固定表示対応版</title>
+<title>潮見ジオラマ AR 固定表示・タップ配置対応版</title>
 
 <script>
 window.__startupErrorText = '';
@@ -137,6 +137,7 @@ button:active {
 #angleBtn { background: #009688; color: #fff; }
 #heightResetBtn { background: #607d8b; color: #fff; }
 #pinBtn { background: #1565c0; color: #fff; }
+#tapPinBtn { background: #00838f; color: #fff; }
 #clearPinBtn { background: #424242; color: #fff; }
 #checkBtn { background: #00a36c; color: #fff; }
 
@@ -235,6 +236,7 @@ button:active {
     <button id="colorBtn">色切替</button>
 
     <button id="pinBtn">この位置に固定</button>
+    <button id="tapPinBtn">タップ位置に固定</button>
     <button id="clearPinBtn">固定解除</button>
 
     <button id="resetBtn">表示リセット</button>
@@ -351,6 +353,7 @@ const rotateBtn = document.querySelector('#rotateBtn');
 const angleBtn = document.querySelector('#angleBtn');
 const colorBtn = document.querySelector('#colorBtn');
 const pinBtn = document.querySelector('#pinBtn');
+const tapPinBtn = document.querySelector('#tapPinBtn');
 const clearPinBtn = document.querySelector('#clearPinBtn');
 const resetBtn = document.querySelector('#resetBtn');
 const checkBtn = document.querySelector('#checkBtn');
@@ -386,18 +389,22 @@ let buildingSplitRatio = 0.18;
 
 let isPinned = false;
 let pinnedGroup = null;
+let waitingForTapPlacement = false;
 
+/*
+  建物は -0.060 が土地と合うため初期値に設定
+*/
 let layerHeightOffset = {
   land: -0.006,
   road: 0.055,
-  building: 0.080,
+  building: -0.060,
   other: 0.030
 };
 
 const defaultLayerHeightOffset = {
   land: -0.006,
   road: 0.055,
-  building: 0.080,
+  building: -0.060,
   other: 0.030
 };
 
@@ -747,10 +754,7 @@ function makeSolidMaterialForLayer(colorValue, layerType) {
 
   return new THREE.MeshStandardMaterial({
     color: colorValue,
-
-    // 土地・道路が消えないように全レイヤー両面表示
     side: THREE.DoubleSide,
-
     roughness: 0.82,
     metalness: 0.02,
     flatShading: true,
@@ -939,7 +943,8 @@ function extractMeshesToProxy(preserveTransform = true) {
     'モデルを表示しました。\n' +
     'X軸180度反転＋平行表示です。\n' +
     '土地・道路・建物はすべて両面表示です。\n' +
-    '固定したい場合は「この位置に固定」を押してください。\n' +
+    '建物高さの初期値は -0.060 です。\n' +
+    '固定したい場合は「この位置に固定」または「タップ位置に固定」を使ってください。\n' +
     '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
     '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
     '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
@@ -1005,34 +1010,56 @@ function adjustBuildingSplit(delta) {
   extractMeshesToProxy(true);
 }
 
-function pinCurrentModelPosition() {
+function disposePinnedGroup() {
+  if (pinnedGroup) {
+    pinnedRoot.object3D.remove(pinnedGroup);
+    pinnedGroup.traverse((node) => {
+      if (node.geometry) node.geometry.dispose && node.geometry.dispose();
+      if (node.material) {
+        if (Array.isArray(node.material)) {
+          node.material.forEach(mat => mat.dispose && mat.dispose());
+        } else {
+          node.material.dispose && node.material.dispose();
+        }
+      }
+    });
+    pinnedGroup = null;
+  }
+}
+
+function createPinnedClone() {
   if (!proxyGroup) {
     statusEl.textContent =
       'まだモデルが生成されていません。\n' +
       '名刺を認識してモデルが表示されてから固定してください。';
-    return;
+    return null;
   }
 
-  if (pinnedGroup) {
-    pinnedRoot.object3D.remove(pinnedGroup);
-    pinnedGroup = null;
-  }
+  disposePinnedGroup();
 
-  pinnedGroup = proxyGroup.clone(true);
+  const clone = proxyGroup.clone(true);
 
-  pinnedGroup.traverse((node) => {
+  clone.traverse((node) => {
     node.visible = true;
     node.frustumCulled = false;
   });
+
+  return clone;
+}
+
+function pinCurrentModelPosition() {
+  const clone = createPinnedClone();
+  if (!clone) return;
 
   modelRoot.object3D.updateWorldMatrix(true, true);
 
   pinnedRoot.object3D.matrixAutoUpdate = false;
   pinnedRoot.object3D.matrix.copy(modelRoot.object3D.matrixWorld);
 
-  pinnedRoot.object3D.add(pinnedGroup);
-  pinnedRoot.setAttribute('visible', 'true');
+  pinnedRoot.object3D.add(clone);
+  pinnedGroup = clone;
 
+  pinnedRoot.setAttribute('visible', 'true');
   isPinned = true;
 
   modelRoot.setAttribute('visible', 'false');
@@ -1040,14 +1067,57 @@ function pinCurrentModelPosition() {
   statusEl.textContent =
     '現在の位置にモデルを固定しました。\n' +
     '名刺を画面外にしても固定モデルを表示し続けます。\n' +
-    'これはMindAR上の簡易固定であり、完全な床・机へのSLAM固定ではありません。';
+    'これはMindAR上の簡易固定です。';
+}
+
+function placePinnedAtScreenPoint(clientX, clientY) {
+  const clone = createPinnedClone();
+  if (!clone) return;
+
+  const THREE = AFRAME.THREE;
+  const rect = sceneEl.canvas.getBoundingClientRect();
+
+  const mouse = new THREE.Vector2(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1
+  );
+
+  const raycaster = new THREE.Raycaster();
+  const camera = sceneEl.camera;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  /*
+    MindAR単体では机の平面検出はできないため、
+    カメラから一定距離の仮想位置に配置します。
+    物理的な机固定ではなく、タップ位置に近い見た目の簡易固定です。
+  */
+  const distance = 1.2;
+  const point = new THREE.Vector3();
+  raycaster.ray.at(distance, point);
+
+  pinnedRoot.object3D.matrixAutoUpdate = true;
+  pinnedRoot.object3D.position.copy(point);
+  pinnedRoot.object3D.rotation.set(0, 0, 0);
+  pinnedRoot.object3D.scale.set(1, 1, 1);
+
+  pinnedRoot.object3D.add(clone);
+  pinnedGroup = clone;
+
+  pinnedRoot.setAttribute('visible', 'true');
+  isPinned = true;
+  waitingForTapPlacement = false;
+
+  modelRoot.setAttribute('visible', 'false');
+
+  statusEl.textContent =
+    'タップ位置にモデルを簡易固定しました。\n' +
+    'MindAR単体では机・床の平面検出はできないため、カメラから一定距離の仮想位置に配置しています。\n' +
+    '物理的な机固定を行うにはWebXR hit-test方式が必要です。';
 }
 
 function clearPinnedModel() {
-  if (pinnedGroup) {
-    pinnedRoot.object3D.remove(pinnedGroup);
-    pinnedGroup = null;
-  }
+  disposePinnedGroup();
 
   pinnedRoot.setAttribute('visible', 'false');
 
@@ -1058,6 +1128,7 @@ function clearPinnedModel() {
   pinnedRoot.object3D.scale.set(1, 1, 1);
 
   isPinned = false;
+  waitingForTapPlacement = false;
 
   modelRoot.setAttribute('visible', 'true');
 
@@ -1065,6 +1136,20 @@ function clearPinnedModel() {
     '固定を解除しました。\n' +
     '名刺を認識すると、モデルは再び名刺に追従します。';
 }
+
+sceneEl.addEventListener('click', (ev) => {
+  if (!waitingForTapPlacement) return;
+
+  placePinnedAtScreenPoint(ev.clientX, ev.clientY);
+});
+
+sceneEl.addEventListener('touchstart', (ev) => {
+  if (!waitingForTapPlacement) return;
+  if (!ev.touches || ev.touches.length === 0) return;
+
+  const t = ev.touches[0];
+  placePinnedAtScreenPoint(t.clientX, t.clientY);
+});
 
 largerBtn.addEventListener('click', () => {
   rootScale = Math.min(50, rootScale * 1.20);
@@ -1096,12 +1181,17 @@ downBtn.addEventListener('click', () => {
   applyRootTransform();
 });
 
+/*
+  建物ボタンは見た目に合わせて逆向きに調整済み。
+  建物↑ → 数値をマイナス方向へ
+  建物↓ → 数値をプラス方向へ
+*/
 buildingUpBtn.addEventListener('click', () => {
-  adjustLayerHeight('building', 0.020);
+  adjustLayerHeight('building', -0.020);
 });
 
 buildingDownBtn.addEventListener('click', () => {
-  adjustLayerHeight('building', -0.020);
+  adjustLayerHeight('building', 0.020);
 });
 
 roadUpBtn.addEventListener('click', () => {
@@ -1176,6 +1266,22 @@ pinBtn.addEventListener('click', () => {
   pinCurrentModelPosition();
 });
 
+tapPinBtn.addEventListener('click', () => {
+  if (!proxyGroup) {
+    statusEl.textContent =
+      'まだモデルが生成されていません。\n' +
+      '名刺を認識してモデルが表示されてから使用してください。';
+    return;
+  }
+
+  waitingForTapPlacement = true;
+
+  statusEl.textContent =
+    'タップ位置固定モードです。\n' +
+    '画面上で、モデルを置きたい位置をタップしてください。\n' +
+    'これは机・床の実平面検出ではなく、画面タップ位置への簡易配置です。';
+});
+
 clearPinBtn.addEventListener('click', () => {
   clearPinnedModel();
 });
@@ -1233,7 +1339,7 @@ markerEl.addEventListener('targetFound', () => {
 
     statusEl.textContent =
       '潮見ジオラマを発見しました。\n' +
-      '固定したい場合は「この位置に固定」を押してください。';
+      '固定したい場合は「この位置に固定」または「タップ位置に固定」を押してください。';
   }
 
   setTimeout(() => {
@@ -1363,6 +1469,7 @@ checkBtn.addEventListener('click', () => {
     'proxyGroup: ' + Boolean(proxyGroup) + '\n' +
     'proxy children: ' + proxyChildren + '\n' +
     'isPinned: ' + isPinned + '\n' +
+    'waitingForTapPlacement: ' + waitingForTapPlacement + '\n' +
     'rootScale: ' + rootScale.toFixed(3) + '\n' +
     'innerScale: ' + innerScale.toFixed(4) + '\n' +
     'X: ' + currentX.toFixed(3) + '\n' +
