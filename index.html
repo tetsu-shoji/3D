@@ -3,7 +3,54 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR 平行表示・X軸反転補正版</title>
+<title>潮見ジオラマ AR 起動診断付き完全版</title>
+
+<script>
+window.__startupErrorText = '';
+
+function setStatusSafe(text) {
+  const el = document.querySelector('#status');
+  if (el) {
+    el.textContent = text;
+  } else {
+    window.__startupErrorText = text;
+  }
+}
+
+window.addEventListener('error', function (e) {
+  const msg =
+    'JavaScriptエラーが発生しました。\n' +
+    'message: ' + e.message + '\n' +
+    'file: ' + e.filename + '\n' +
+    'line: ' + e.lineno + '\n' +
+    'column: ' + e.colno;
+
+  console.error(msg);
+  setStatusSafe(msg);
+});
+
+window.addEventListener('unhandledrejection', function (e) {
+  const msg =
+    'Promiseエラーが発生しました。\n' +
+    String(e.reason);
+
+  console.error(msg);
+  setStatusSafe(msg);
+});
+
+window.addEventListener('DOMContentLoaded', function () {
+  const el = document.querySelector('#status');
+  if (el) {
+    if (window.__startupErrorText) {
+      el.textContent = window.__startupErrorText;
+    } else {
+      el.textContent =
+        'HTMLは読み込まれました。\n' +
+        'A-Frame / MindAR の初期化を待っています。';
+    }
+  }
+});
+</script>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
@@ -109,6 +156,8 @@ button:active {
   line-height: 1.5;
   white-space: pre-wrap;
   pointer-events: none;
+  max-height: 34vh;
+  overflow: hidden;
 }
 
 #targetGuide {
@@ -204,13 +253,11 @@ button:active {
 
   <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
 
-    <!-- 建物の面にうっすら陰影を出すためのライト -->
     <a-light type="ambient" intensity="1.10"></a-light>
     <a-light type="directional" intensity="2.3" position="0.9 1.4 2.0"></a-light>
     <a-light type="directional" intensity="0.9" position="-1.2 -0.4 1.2"></a-light>
     <a-light type="point" intensity="1.0" position="0 0 1"></a-light>
 
-    <!-- 通常は非表示の確認用 -->
     <a-box
       id="debugBox"
       visible="false"
@@ -231,7 +278,6 @@ button:active {
       material="color: #00ffff; wireframe: true; transparent: true; opacity: 0.6;">
     </a-box>
 
-    <!-- 表示用モデル -->
     <a-entity
       id="modelRoot"
       position="0 0 0.28"
@@ -240,7 +286,6 @@ button:active {
       visible="true">
     </a-entity>
 
-    <!-- 元GLB。読み込み専用 -->
     <a-entity
       id="shiomiOriginal"
       gltf-model="url(./shiomi_city.glb)"
@@ -324,34 +369,29 @@ let yawMode = 0;
 let angleMode = 0;
 
 /*
-  重要：
   地面を足の裏側から見ているような状態を直すため、
-  モデル全体をX軸180度反転する。
-  ただし初期角度は0度なので、名刺面と地面は平行。
+  モデル全体をX軸180度反転。
+  初期角度は0度なので、名刺面と地面は平行表示。
 */
 let baseFlipXDeg = 180;
 
-/*
-  最大メッシュを高さで土地・建物に分割するしきい値。
-  小さいほど建物として抽出される範囲が増える。
-*/
 let buildingSplitRatio = 0.18;
 
-*et layerHeightOffset = {
-  land: -*.006,
+let layerHeightOffset = {
+  land: -0.006,
   road: 0.055,
-  building: 0*080,
+  building: 0.080,
   other: 0.030
 };
 
-const defa*ltLayerHeightOffset = {
-  land: -0*006,
+const defaultLayerHeightOffset = {
+  land: -0.006,
   road: 0.055,
-  building: 0.*80,
+  building: 0.080,
   other: 0.030
 };
 
-const color*ets = [
+const colorSets = [
   {
     land: 0x4caf50,
     building: 0xd8d8d8,
@@ -391,481 +431,493 @@ const angleModes = [
     z: 0.48,
     y: 0.08
   }
-]*
+];
 
-window.addEventListener('load', *) => {
+window.addEventListener('DOMContentLoaded', () => {
   statusEl.textContent =
-  * 'ページを読み込みました。\n' +
-    '開始ボタンを押して*ださい。';
+    'HTMLは読み込まれました。\n' +
+    'A-Frame / MindAR の初期化を待っています。';
+
+  setTimeout(() => {
+    if (!sceneLoaded) {
+      statusEl.textContent =
+        'A-Frameシーンのloadedイベントを待っています。\n' +
+        'この表示が続く場合は、CDN読み込み、scriptタグ、またはHTML構文を確認してください。\n' +
+        '確認ポイント：A-Frame / MindAR のscriptタグがhref化していないか。';
+    }
+  }, 4000);
 });
 
-sceneEl.addEventListen*r('loaded', () => {
-  sceneLoaded * true;
-  statusEl.textContent =
-  * 'A-Frameシーンを読み込みました。\n' +
-    'GL*読み込み後、自動で表示します。';
+window.addEventListener('load', () => {
+  if (!sceneLoaded) {
+    statusEl.textContent =
+      'ページ全体は読み込まれましたが、A-Frameシーンの初期化待ちです。\n' +
+      '少し待ってから開始ボタンを押してください。\n' +
+      '進まない場合は画面に出るJavaScriptエラーを確認してください。';
+  }
 });
 
-function co*ntSourceMeshes() {
-  const obj = o*iginalEl.object3D;
+sceneEl.addEventListener('loaded', () => {
+  sceneLoaded = true;
+  statusEl.textContent =
+    'A-Frameシーンを読み込みました。\n' +
+    '開始ボタンを押してください。';
+});
+
+function countSourceMeshes() {
+  const obj = originalEl.object3D;
   let c = 0;
-  *et m = 0;
+  let m = 0;
   let v = 0;
 
-  obj.trav*rse((node) => {
+  obj.traverse((node) => {
     c++;
-    if (n*de.isMesh) {
+    if (node.isMesh) {
       m++;
-      if (*ode.visible) v++;
+      if (node.visible) v++;
     }
   });
 
-  c*ildCount = c;
-  sourceMeshCount = *;
+  childCount = c;
+  sourceMeshCount = m;
   visibleSourceMeshCount = v;
 
- *return {
+  return {
     childCount: c,
-    me*hCount: m,
-    visibleMeshCount: v*  };
+    meshCount: m,
+    visibleMeshCount: v
+  };
 }
 
-function clearProxyGroup()*{
+function clearProxyGroup() {
   if (proxyGroup) {
-    modelRoo*.object3D.remove(proxyGroup);
+    modelRoot.object3D.remove(proxyGroup);
 
-   *proxyGroup.traverse((node) => {
-  *   if (node.geometry) node.geometr*.dispose();
+    proxyGroup.traverse((node) => {
+      if (node.geometry) node.geometry.dispose();
 
-      if (node.materi*l) {
-        if (Array.isArray(nod*.material)) {
-          node.mater*al.forEach(mat => mat.dispose());
-*       } else {
-          node.mat*rial.dispose();
+      if (node.material) {
+        if (Array.isArray(node.material)) {
+          node.material.forEach(mat => mat.dispose());
+        } else {
+          node.material.dispose();
         }
       }
-*   });
+    });
 
     proxyGroup = null;
-   *proxyMeshCount = 0;
+    proxyMeshCount = 0;
   }
 }
 
-functio* getGeometryVolume(geom) {
-  geom.*omputeBoundingBox();
-  if (!geom.b*undingBox) return 0;
+function getGeometryVolume(geom) {
+  geom.computeBoundingBox();
+  if (!geom.boundingBox) return 0;
 
-  const size*= new AFRAME.THREE.Vector3();
-  ge*m.boundingBox.getSize(size);
+  const size = new AFRAME.THREE.Vector3();
+  geom.boundingBox.getSize(size);
 
-  re*urn Math.abs(size.x * size.y * siz*.z);
+  return Math.abs(size.x * size.y * size.z);
 }
 
-function remapYUpToARZUp(g*om) {
-  const position = geom.attr*butes.position;
-  if (!position) r*turn;
+function remapYUpToARZUp(geom) {
+  const position = geom.attributes.position;
+  if (!position) return;
 
-  for (let i = 0; i < posit*on.count; i++) {
-    const x = pos*tion.getX(i);
-    const y = positi*n.getY(i);
-    const z = position.*etZ(i);
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const y = position.getY(i);
+    const z = position.getZ(i);
 
-    // 座標入れ替えはしない
-    pos*tion.setXYZ(i, x, y, z);
+    position.setXYZ(i, x, y, z);
   }
 
-  po*ition.needsUpdate = true;
-  geom.c*mputeVertexNormals();
-  geom.compu*eBoundingBox();
+  position.needsUpdate = true;
+  geom.computeVertexNormals();
+  geom.computeBoundingBox();
 }
 
-function splitG*ometryByHeight(sourceGeom, thresho*dRatio) {
-  const THREE = AFRAME.T*REE;
+function splitGeometryByHeight(sourceGeom, thresholdRatio) {
+  const THREE = AFRAME.THREE;
 
-  const geom = sourceGeom.cl*ne();
-  geom.computeBoundingBox();*
+  const geom = sourceGeom.clone();
+  geom.computeBoundingBox();
+
   if (!geom.boundingBox) {
-    re*urn {
-      low: geom,
-      high:*null
-    };
+    return { low: geom, high: null };
   }
 
-  const box = geo*.boundingBox;
-  const minZ = box.m*n.z;
+  const box = geom.boundingBox;
+  const minZ = box.min.z;
   const maxZ = box.max.z;
-  c*nst thresholdZ = minZ + (maxZ - mi*Z) * thresholdRatio;
+  const thresholdZ = minZ + (maxZ - minZ) * thresholdRatio;
 
-  const pos * geom.attributes.position;
-  const*indexAttr = geom.index;
+  const pos = geom.attributes.position;
+  const indexAttr = geom.index;
 
-  const l*wPositions = [];
-  const highPosit*ons = [];
+  const lowPositions = [];
+  const highPositions = [];
 
-  function pushTriangle*target, ax, ay, az, bx, by, bz, cx* cy, cz) {
-    target.push(ax, ay,*az, bx, by, bz, cx, cy, cz);
+  function pushTriangle(target, ax, ay, az, bx, by, bz, cx, cy, cz) {
+    target.push(ax, ay, az, bx, by, bz, cx, cy, cz);
   }
 
-* if (indexAttr) {
-    for (let i =*0; i < indexAttr.count; i += 3) {
-*     const ia = indexAttr.getX(i);*      const ib = indexAttr.getX(i * 1);
-      const ic = indexAttr.ge*X(i + 2);
+  if (indexAttr) {
+    for (let i = 0; i < indexAttr.count; i += 3) {
+      const ia = indexAttr.getX(i);
+      const ib = indexAttr.getX(i + 1);
+      const ic = indexAttr.getX(i + 2);
 
-      const ax = pos.ge*X(ia);
-      const ay = pos.getY(i*);
+      const ax = pos.getX(ia);
+      const ay = pos.getY(ia);
       const az = pos.getZ(ia);
-*      const bx = pos.getX(ib);
-   *  const by = pos.getY(ib);
-      c*nst bz = pos.getZ(ib);
 
-      cons* cx = pos.getX(ic);
-      const cy*= pos.getY(ic);
-      const cz = p*s.getZ(ic);
+      const bx = pos.getX(ib);
+      const by = pos.getY(ib);
+      const bz = pos.getZ(ib);
 
-      const avgZ = (a* + bz + cz) / 3;
+      const cx = pos.getX(ic);
+      const cy = pos.getY(ic);
+      const cz = pos.getZ(ic);
 
-      if (avgZ >* thresholdZ) {
-        pushTriangl*(highPositions, ax, ay, az, bx, by* bz, cx, cy, cz);
+      const avgZ = (az + bz + cz) / 3;
+
+      if (avgZ >= thresholdZ) {
+        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
       } else {
- *      pushTriangle(lowPositions, a*, ay, az, bx, by, bz, cx, cy, cz);*      }
+        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      }
     }
   } else {
-    for (*et i = 0; i < pos.count; i += 3) {*      const ax = pos.getX(i);
-    * const ay = pos.getY(i);
-      con*t az = pos.getZ(i);
+    for (let i = 0; i < pos.count; i += 3) {
+      const ax = pos.getX(i);
+      const ay = pos.getY(i);
+      const az = pos.getZ(i);
 
-      const b* = pos.getX(i + 1);
-      const by*= pos.getY(i + 1);
-      const bz * pos.getZ(i + 1);
+      const bx = pos.getX(i + 1);
+      const by = pos.getY(i + 1);
+      const bz = pos.getZ(i + 1);
 
-      const cx * pos.getX(i + 2);
-      const cy =*pos.getY(i + 2);
-      const cz = *os.getZ(i + 2);
+      const cx = pos.getX(i + 2);
+      const cy = pos.getY(i + 2);
+      const cz = pos.getZ(i + 2);
 
-      const avgZ * (az + bz + cz) / 3;
+      const avgZ = (az + bz + cz) / 3;
 
-      if (av*Z >= thresholdZ) {
-        pushTri*ngle(highPositions, ax, ay, az, bx* by, bz, cx, cy, cz);
-      } else*{
-        pushTriangle(lowPosition*, ax, ay, az, bx, by, bz, cx, cy, *z);
+      if (avgZ >= thresholdZ) {
+        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      } else {
+        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
       }
     }
   }
 
-  function *uildGeometry(positions) {
-    if (*ositions.length === 0) return null*
+  function buildGeometry(positions) {
+    if (positions.length === 0) return null;
 
-    const g = new THREE.BufferGe*metry();
-    g.setAttribute(
-     *'position',
-      new THREE.Float3*BufferAttribute(positions, 3)
-    *;
-
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     g.computeVertexNormals();
- *  g.computeBoundingBox();
-    retu*n g;
+    g.computeBoundingBox();
+    return g;
   }
 
   return {
-    low: buil*Geometry(lowPositions),
-    high: *uildGeometry(highPositions)
+    low: buildGeometry(lowPositions),
+    high: buildGeometry(highPositions)
   };
-}*
-function normalizeLayerHeight(geo*, layerType) {
-  geom.computeBound*ngBox();
-
-  if (!geom.boundingBox)*return;
-
-  const box = geom.boundi*gBox;
-  const minZ = box.min.z;
-  *onst maxZ = box.max.z;
-
-  if (laye*Type === 'land') {
-    geom.transl*te(0, 0, -maxZ + layerHeightOffset*land);
-    return;
-  }
-
-  if (laye*Type === 'road') {
-    geom.transl*te(0, 0, -minZ + layerHeightOffset*road);
-    return;
-  }
-
-  if (laye*Type === 'building') {
-    geom.tr*nslate(0, 0, -minZ + layerHeightOf*set.building);
-    return;
-  }
-
-  *eom.translate(0, 0, -minZ + layerH*ightOffset.other);
 }
 
-function fix*eometryWindingToFaceUp(geom, layer*ype) {
-  if (!geom || !geom.attrib*tes || !geom.attributes.position) *eturn;
+function normalizeLayerHeight(geom, layerType) {
+  geom.computeBoundingBox();
 
-  geom.computeVertexNormal*();
+  if (!geom.boundingBox) return;
 
-  const normalAttr = geom.att*ibutes.normal;
-  if (!normalAttr) *eturn;
+  const box = geom.boundingBox;
+  const minZ = box.min.z;
+  const maxZ = box.max.z;
+
+  if (layerType === 'land') {
+    geom.translate(0, 0, -maxZ + layerHeightOffset.land);
+    return;
+  }
+
+  if (layerType === 'road') {
+    geom.translate(0, 0, -minZ + layerHeightOffset.road);
+    return;
+  }
+
+  if (layerType === 'building') {
+    geom.translate(0, 0, -minZ + layerHeightOffset.building);
+    return;
+  }
+
+  geom.translate(0, 0, -minZ + layerHeightOffset.other);
+}
+
+function fixGeometryWindingToFaceUp(geom, layerType) {
+  if (!geom || !geom.attributes || !geom.attributes.position) return;
+
+  geom.computeVertexNormals();
+
+  const normalAttr = geom.attributes.normal;
+  if (!normalAttr) return;
 
   let sumZ = 0;
-  let coun* = 0;
+  let count = 0;
 
-  for (let i = 0; i < norma*Attr.count; i++) {
-    sumZ += nor*alAttr.getZ(i);
+  for (let i = 0; i < normalAttr.count; i++) {
+    sumZ += normalAttr.getZ(i);
     count++;
   }
 
-* if (count === 0) return;
+  if (count === 0) return;
 
-  const*avgZ = sumZ / count;
+  const avgZ = sumZ / count;
 
-  const shou*dFaceUp =
-    layerType === 'land'*||
-    layerType === 'road' ||
-   *layerType === 'building';
-
-  if (!*houldFaceUp) return;
-
-  if (avgZ <*0) {
-    const pos = geom.attribut*s.position;
-    const indexAttr = *eom.index;
+  if (avgZ < 0) {
+    const pos = geom.attributes.position;
+    const indexAttr = geom.index;
 
     if (indexAttr) {
- *    for (let i = 0; i < indexAttr.*ount; i += 3) {
-        const a = *ndexAttr.getX(i);
-        const b * indexAttr.getX(i + 1);
-        co*st c = indexAttr.getX(i + 2);
+      for (let i = 0; i < indexAttr.count; i += 3) {
+        const a = indexAttr.getX(i);
+        const b = indexAttr.getX(i + 1);
+        const c = indexAttr.getX(i + 2);
 
-   *    indexAttr.setX(i, a);
-        *ndexAttr.setX(i + 1, c);
-        i*dexAttr.setX(i + 2, b);
+        indexAttr.setX(i, a);
+        indexAttr.setX(i + 1, c);
+        indexAttr.setX(i + 2, b);
       }
 
- *    indexAttr.needsUpdate = true;
-*   } else {
-      for (let i = 0; * < pos.count; i += 3) {
-        co*st bx = pos.getX(i + 1);
-        c*nst by = pos.getY(i + 1);
-        *onst bz = pos.getZ(i + 1);
+      indexAttr.needsUpdate = true;
+    } else {
+      for (let i = 0; i < pos.count; i += 3) {
+        const bx = pos.getX(i + 1);
+        const by = pos.getY(i + 1);
+        const bz = pos.getZ(i + 1);
 
-      * const cx = pos.getX(i + 2);
-     *  const cy = pos.getY(i + 2);
-    *   const cz = pos.getZ(i + 2);
+        const cx = pos.getX(i + 2);
+        const cy = pos.getY(i + 2);
+        const cz = pos.getZ(i + 2);
 
-  *     pos.setXYZ(i + 1, cx, cy, cz)*
-        pos.setXYZ(i + 2, bx, by,*bz);
+        pos.setXYZ(i + 1, cx, cy, cz);
+        pos.setXYZ(i + 2, bx, by, bz);
       }
 
-      pos.needsUpdat* = true;
+      pos.needsUpdate = true;
     }
 
-    geom.computeVe*texNormals();
-    geom.computeBoun*ingBox();
+    geom.computeVertexNormals();
+    geom.computeBoundingBox();
   }
 }
 
-function getLayer*enderOrder(layerType) {
-  if (laye*Type === 'land') return 10;
-  if (*ayerType === 'building') return 20*
-  if (layerType === 'road') retur* 30;
+function getLayerRenderOrder(layerType) {
+  if (layerType === 'land') return 10;
+  if (layerType === 'building') return 20;
+  if (layerType === 'road') return 30;
   return 25;
 }
 
-function make*olidMaterialForLayer(colorValue, l*yerType) {
-  const THREE = AFRAME.*HREE;
+function makeSolidMaterialForLayer(colorValue, layerType) {
+  const THREE = AFRAME.THREE;
 
-  let polygonOffsetFactor =*0;
+  let polygonOffsetFactor = 0;
   let polygonOffsetUnits = 0;
 
-* if (layerType === 'road') {
-    p*lygonOffsetFactor = -8;
-    polygo*OffsetUnits = -8;
-  } else if (lay*rType === 'building') {
-    polygo*OffsetFactor = -2;
-    polygonOffs*tUnits = -2;
-  } else if (layerTyp* === 'land') {
-    polygonOffsetFa*tor = 2;
-    polygonOffsetUnits = *;
+  if (layerType === 'road') {
+    polygonOffsetFactor = -8;
+    polygonOffsetUnits = -8;
+  } else if (layerType === 'building') {
+    polygonOffsetFactor = -2;
+    polygonOffsetUnits = -2;
+  } else if (layerType === 'land') {
+    polygonOffsetFactor = 2;
+    polygonOffsetUnits = 2;
   }
 
-  return new THREE.MeshStan*ardMaterial({
-    color: colorValu*,
-    side: layerType === 'buildin*' ? THREE.DoubleSide : THREE.Front*ide,
+  return new THREE.MeshStandardMaterial({
+    color: colorValue,
+    side: layerType === 'building' ? THREE.DoubleSide : THREE.FrontSide,
     roughness: 0.82,
-    meta*ness: 0.02,
-    flatShading: true,*    transparent: false,
-    opacit*: 1.0,
+    metalness: 0.02,
+    flatShading: true,
+    transparent: false,
+    opacity: 1.0,
     depthTest: true,
-    de*thWrite: true,
-    polygonOffset: *rue,
-    polygonOffsetFactor: poly*onOffsetFactor,
-    polygonOffsetU*its: polygonOffsetUnits
+    depthWrite: true,
+    polygonOffset: true,
+    polygonOffsetFactor: polygonOffsetFactor,
+    polygonOffsetUnits: polygonOffsetUnits
   });
 }
 
-f*nction addLayerMesh(geom, layerTyp*) {
+function addLayerMesh(geom, layerType) {
   const THREE = AFRAME.THREE;
-* const colors = colorSets[colorMode % colorSets.length];
+  const colors = colorSets[colorMode % colorSets.length];
 
-  // 面の向きを上*きに補正
-  fixGeometryWindingToFaceUp(*eom, layerType);
+  fixGeometryWindingToFaceUp(geom, layerType);
 
-  let colorValue*= colors.other;
-  if (layerType ==* 'land') colorValue = colors.land;*  if (layerType === 'building') co*orValue = colors.building;
-  if (l*yerType === 'road') colorValue = c*lors.road;
+  let colorValue = colors.other;
+  if (layerType === 'land') colorValue = colors.land;
+  if (layerType === 'building') colorValue = colors.building;
+  if (layerType === 'road') colorValue = colors.road;
 
-  const material = mak*SolidMaterialForLayer(colorValue, *ayerType);
+  const material = makeSolidMaterialForLayer(colorValue, layerType);
 
-  const mesh = new THR*E.Mesh(geom, material);
-  mesh.vis*ble = true;
-  mesh.frustumCulled =*false;
-  mesh.renderOrder = getLay*rRenderOrder(layerType);
+  const mesh = new THREE.Mesh(geom, material);
+  mesh.visible = true;
+  mesh.frustumCulled = false;
+  mesh.renderOrder = getLayerRenderOrder(layerType);
 
-  proxyG*oup.add(mesh);
+  proxyGroup.add(mesh);
 }
 
-function updateP*oxyRotation() {
-  if (!proxyGroup)*return;
+function updateProxyRotation() {
+  if (!proxyGroup) return;
 
-  const THREE = AFRAME.TH*EE;
+  const THREE = AFRAME.THREE;
+  const pitchDeg = angleModes[angleMode].pitchDeg;
 
-  const pitchDeg = angleModes*angleMode].pitchDeg;
+  const totalPitch = THREE.MathUtils.degToRad(baseFlipXDeg + pitchDeg);
+  const zYaw = yawMode % 2 === 0 ? 0 : Math.PI;
 
-  // X軸180度反* + 表示角度
-  const totalPitch = THREE*MathUtils.degToRad(baseFlipXDeg + *itchDeg);
+  proxyGroup.rotation.set(totalPitch, 0, zYaw);
+}
 
-  // 180度回転ボタンは地図面上の向き変*なのでZ軸回転
-  const zYaw = yawMode % 2*=== 0 ? 0 : Math.PI;
+function extractMeshesToProxy(preserveTransform = true) {
+  const THREE = AFRAME.THREE;
 
-  proxyGroup*rotation.set(totalPitch, 0, zYaw);*}
+  clearProxyGroup();
 
-function extractMeshesToProxy(p*eserveTransform = true) {
-  const *HREE = AFRAME.THREE;
+  const sourceRoot = originalEl.object3D;
+  sourceRoot.updateMatrixWorld(true);
 
-  clearProxy*roup();
+  const counts = countSourceMeshes();
 
-  const sourceRoot = orig*nalEl.object3D;
-  sourceRoot.updat*MatrixWorld(true);
-
-  const counts*= countSourceMeshes();
-
-  if (coun*s.meshCount === 0) {
-    statusEl.*extContent =
-      '元GLBのメッシュが0です。*n' +
-      'GLB形式または中身を確認してください。';*    return;
+  if (counts.meshCount === 0) {
+    statusEl.textContent =
+      '元GLBのメッシュが0です。\n' +
+      'shiomi_city.glb の中身または読み込み状態を確認してください。';
+    return;
   }
 
-  const inverseRo*tMatrix = sourceRoot.matrixWorld.c*one().invert();
+  const inverseRootMatrix = sourceRoot.matrixWorld.clone().invert();
 
   const items = [];
-  const totalBox = new THREE.Box*();
+  const totalBox = new THREE.Box3();
   let hasBox = false;
 
-  sourc*Root.traverse((node) => {
-    if (*node.isMesh || !node.geometry) ret*rn;
+  sourceRoot.traverse((node) => {
+    if (!node.isMesh || !node.geometry) return;
 
-    const positionAttr = node*geometry.attributes.position;
-    *f (!positionAttr || positionAttr.c*unt === 0) return;
+    const positionAttr = node.geometry.attributes.position;
+    if (!positionAttr || positionAttr.count === 0) return;
 
-    const geom*= node.geometry.clone();
+    const geom = node.geometry.clone();
 
-    cons* relativeMatrix = new THREE.Matrix*().multiplyMatrices(
-      inverse*ootMatrix,
+    const relativeMatrix = new THREE.Matrix4().multiplyMatrices(
+      inverseRootMatrix,
       node.matrixWorld
-*   );
+    );
 
-    geom.applyMatrix4(relat*veMatrix);
-    remapYUpToARZUp(geo*);
+    geom.applyMatrix4(relativeMatrix);
+    remapYUpToARZUp(geom);
 
-    geom.computeVertexNormals(*;
+    geom.computeVertexNormals();
     geom.computeBoundingBox();
 
-*   if (geom.boundingBox) {
-      t*talBox.union(geom.boundingBox);
-  *   hasBox = true;
+    if (geom.boundingBox) {
+      totalBox.union(geom.boundingBox);
+      hasBox = true;
     }
 
-    items*push({
+    items.push({
       geometry: geom,
-     *name: node.name || '',
-      volum*: getGeometryVolume(geom)
+      name: node.name || '',
+      volume: getGeometryVolume(geom)
     });
-* });
+  });
 
-  if (!hasBox || items.lengt* === 0) {
-    statusEl.textContent*=
-      'メッシュはありますが、頂点情報を取得できません。\*' +
-      'GLBの中身に頂点がない可能性があります。';*    return;
+  if (!hasBox || items.length === 0) {
+    statusEl.textContent =
+      'メッシュはありますが、頂点情報を取得できません。';
+    return;
   }
 
-  items.sort((a, *) => b.volume - a.volume);
+  items.sort((a, b) => b.volume - a.volume);
 
-  cons* size = new THREE.Vector3();
-  con*t center = new THREE.Vector3();
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
 
- *totalBox.getSize(size);
-  totalBox*getCenter(center);
+  totalBox.getSize(size);
+  totalBox.getCenter(center);
 
-  boxSizeText *
+  boxSizeText =
     size.x.toFixed(4) + ', ' +
-  * size.y.toFixed(4) + ', ' +
-    si*e.z.toFixed(4);
+    size.y.toFixed(4) + ', ' +
+    size.z.toFixed(4);
 
-  boxCenterText =*    center.x.toFixed(4) + ', ' +
- *  center.y.toFixed(4) + ', ' +
-   *center.z.toFixed(4);
+  boxCenterText =
+    center.x.toFixed(4) + ', ' +
+    center.y.toFixed(4) + ', ' +
+    center.z.toFixed(4);
 
-  const maxD*m = Math.max(size.x, size.y, size.*);
+  const maxDim = Math.max(size.x, size.y, size.z);
 
-  if (!isFinite(maxDim) || max*im <= 0) {
-    statusEl.textConten* =
+  if (!isFinite(maxDim) || maxDim <= 0) {
+    statusEl.textContent =
       'モデルサイズの計算に失敗しました。\n' +
- *    'box size: ' + boxSizeText;
-  * return;
+      'box size: ' + boxSizeText;
+    return;
   }
 
-  const desiredSize * 0.78;
-  innerScale = desiredSize * maxDim;
-  innerScale = Math.max(0*001, Math.min(200, innerScale));
+  const desiredSize = 0.78;
+  innerScale = desiredSize / maxDim;
+  innerScale = Math.max(0.001, Math.min(200, innerScale));
 
-* proxyGroup = new THREE.Group();
- *proxyGroup.name = 'shiomi_proxy_gr*up';
+  proxyGroup = new THREE.Group();
+  proxyGroup.name = 'shiomi_proxy_group';
 
-  items.forEach((item, index* => {
-    const baseGeom = item.ge*metry;
+  items.forEach((item, index) => {
+    const baseGeom = item.geometry;
 
-    baseGeom.translate(-ce*ter.x, -center.y, -center.z);
-    *aseGeom.scale(innerScale, innerSca*e, innerScale);
+    baseGeom.translate(-center.x, -center.y, -center.z);
+    baseGeom.scale(innerScale, innerScale, innerScale);
 
-    if (index ===*0) {
-      const split = splitGeom*tryByHeight(baseGeom, buildingSpli*Ratio);
+    if (index === 0) {
+      const split = splitGeometryByHeight(baseGeom, buildingSplitRatio);
 
       if (split.low) {
-  *     normalizeLayerHeight(split.lo*, 'land');
-        addLayerMesh(sp*it.low, 'land');
+        normalizeLayerHeight(split.low, 'land');
+        addLayerMesh(split.low, 'land');
       }
 
-      if*(split.high) {
-        normalizeLa*erHeight(split.high, 'building');
-*       addLayerMesh(split.high, 'b*ilding');
+      if (split.high) {
+        normalizeLayerHeight(split.high, 'building');
+        addLayerMesh(split.high, 'building');
       }
     } else {
-   *  normalizeLayerHeight(baseGeom, '*oad');
-      addLayerMesh(baseGeom* 'road');
+      normalizeLayerHeight(baseGeom, 'road');
+      addLayerMesh(baseGeom, 'road');
     }
   });
 
-  proxyMesh*ount = proxyGroup.children.length;*
-  proxyGroup.position.set(0, 0, 0*;
-  proxyGroup.scale.set(1, 1, 1);*
-  modelRoot.object3D.add(proxyGro*p);
+  proxyMeshCount = proxyGroup.children.length;
 
-  originalEl.object3D.visible*= false;
-  modelRoot.object3D.visi*le = true;
+  proxyGroup.position.set(0, 0, 0);
+  proxyGroup.scale.set(1, 1, 1);
 
-  if (!preserveTransfo*m) {
+  modelRoot.object3D.add(proxyGroup);
+
+  originalEl.object3D.visible = false;
+  modelRoot.object3D.visible = true;
+
+  if (!preserveTransform) {
     const mode = angleModes[angleMode];
     currentY = mode.y;
- *  currentZ = mode.z;
+    currentZ = mode.z;
     rootScale = 1.0;
   }
 
@@ -873,10 +925,9 @@ function extractMeshesToProxy(p*eserveTransform = true) {
   applyRootTransform(false);
 
   statusEl.textContent =
-    'X軸180度反転＋平行表示で更新しました。\n' +
-    '地面を足の裏側から見ている状態を直すため、モデル全体をX軸180度反転しています。\n' +
-    '初期角度は0度なので、名刺面と地面は平行表示です。\n' +
-    '建物にはうっすら陰影が出る材質を使用しています。\n' +
+    'モデルを表示しました。\n' +
+    'X軸180度反転＋平行表示です。\n' +
+    '建物には陰影が出る材質を使用しています。\n' +
     '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
     '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
     '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
@@ -889,7 +940,7 @@ originalEl.addEventListener('model-loaded', () => {
 
   statusEl.textContent =
     'GLBを読み込みました。\n' +
-    '自動で高さ分割メッシュを生成します。';
+    'メッシュを生成しています。';
 
   setTimeout(() => {
     extractMeshesToProxy(false);
@@ -1053,10 +1104,7 @@ resetBtn.addEventListener('click', () => {
   currentX = 0.0;
   yawMode = 0;
   angleMode = 0;
-
-  // 重要：表側を見るためX軸180度反転、ただし角度は0度で平行
   baseFlipXDeg = 180;
-
   buildingSplitRatio = 0.18;
 
   layerHeightOffset = {
@@ -1074,8 +1122,7 @@ resetBtn.addEventListener('click', () => {
 
   statusEl.textContent =
     '表示リセットしました。\n' +
-    '地面を表側から見るため、X軸180度反転を標準にしています。\n' +
-    '初期角度は0度なので、名刺面と地面は平行表示です。';
+    'X軸180度反転、平行表示に戻しました。';
 });
 
 markerEl.addEventListener('targetFound', () => {
@@ -1092,8 +1139,8 @@ markerEl.addEventListener('targetFound', () => {
 
   statusEl.textContent =
     '潮見ジオラマを発見しました。\n' +
-    'X軸180度反転＋平行表示で、地面の表側を見る想定です。\n' +
-    '向きが逆の場合は「180度回転」、建物抽出が弱い場合は「建物判定－」を押してください。';
+    'X軸180度反転＋平行表示で表示しています。\n' +
+    '建物が出ない場合は「建物判定－」、建物が低い場合は「建物↑」を押してください。';
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
@@ -1138,8 +1185,8 @@ startBtn.addEventListener('click', async () => {
 
     if (!sceneLoaded) {
       statusEl.textContent =
-        'ARシーンの読み込みがまだ完了していません。\n' +
-        '少し待ってから開始してください。';
+        'A-Frameシーンの読み込みがまだ完了していません。\n' +
+        '少し待つか、画面に表示されているエラーを確認してください。';
       return;
     }
 
@@ -1148,7 +1195,7 @@ startBtn.addEventListener('click', async () => {
     if (!mindar) {
       statusEl.textContent =
         'MindARシステムが見つかりません。\n' +
-        'scriptタグを確認してください。';
+        'A-Frame / MindAR のscriptタグを確認してください。';
       return;
     }
 
