@@ -337,13 +337,32 @@ button:active {
     <a-light type="directional" intensity="2.2" position="0.9 1.4 2.0"></a-light>
     <a-light type="directional" intensity="0.8" position="-1.2 -0.4 1.2"></a-light>
 
+    <a-box
+      id="debugBox"
+      visible="false"
+      position="0 0 0.08"
+      width="0.06"
+      height="0.06"
+      depth="0.06"
+      color="#ff0000">
+    </a-box>
+
     <a-entity
-      id="shiomiMindAR"
-      gltf-model="url(./shiomi_city.glb)"
+      id="modelHolder"
       position="0 0 0.28"
       rotation="180 0 0"
-      scale="0.78 0.78 0.78"
+      scale="1 1 1"
       visible="true">
+
+      <a-entity
+        id="shiomiMindAR"
+        gltf-model="url(./shiomi_city.glb)"
+        position="0 0 0"
+        rotation="0 0 0"
+        scale="1 1 1"
+        visible="true">
+      </a-entity>
+
     </a-entity>
 
     <a-text
@@ -360,7 +379,9 @@ button:active {
 <script>
 const sceneEl = document.querySelector("#arScene");
 const markerEl = document.querySelector("#markerTarget");
+const modelHolder = document.querySelector("#modelHolder");
 const shiomiMindAR = document.querySelector("#shiomiMindAR");
+const debugBox = document.querySelector("#debugBox");
 
 const startBtn = document.querySelector("#startBtn");
 const stopBtn = document.querySelector("#stopBtn");
@@ -392,10 +413,13 @@ let modelLoaded = false;
 let arStarted = false;
 let wasMindARActiveBeforeFixed = false;
 
-let currentScale = 0.78;
+let currentScale = 1.0;
+let autoFitScale = 1.0;
+
 let currentX = 0.0;
 let currentY = 0.0;
 let currentZ = 0.28;
+
 let yawMode = 0;
 let angleMode = 0;
 
@@ -452,8 +476,12 @@ sceneEl.addEventListener("loaded", () => {
 
 shiomiMindAR.addEventListener("model-loaded", () => {
   modelLoaded = true;
+
+  fitMindARModel();
+
   statusEl.textContent =
     "shiomi_city.glb を読み込みました。\n" +
+    "自動で中央寄せ・スケール調整しました。\n" +
     "開始ボタンを押して名刺マーカーにかざしてください。";
 });
 
@@ -509,6 +537,47 @@ if (fixedViewer) {
     "<model-viewer id=\"fixedViewer\"> のタグを確認してください。";
 }
 
+function fitMindARModel() {
+  const THREE = AFRAME.THREE;
+
+  const obj = shiomiMindAR.object3D;
+
+  obj.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(obj);
+
+  if (!box || box.isEmpty()) {
+    statusEl.textContent =
+      "GLBのサイズ取得に失敗しました。\n" +
+      "確認ボタンを押してください。";
+    return;
+  }
+
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+
+  box.getSize(size);
+  box.getCenter(center);
+
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  if (!isFinite(maxDim) || maxDim <= 0) {
+    statusEl.textContent =
+      "GLBサイズが不正です。\n" +
+      "maxDim: " + maxDim;
+    return;
+  }
+
+  const desiredSize = 0.78;
+  autoFitScale = desiredSize / maxDim;
+  autoFitScale = Math.max(0.0001, Math.min(1000, autoFitScale));
+
+  shiomiMindAR.object3D.position.set(-center.x, -center.y, -center.z);
+  currentScale = autoFitScale;
+
+  applyMindARTransform(false);
+}
+
 function applyMindARTransform(showMessage = true) {
   const angle = angleModes[angleMode];
   const rotZ = yawMode % 2 === 0 ? 0 : 180;
@@ -516,14 +585,14 @@ function applyMindARTransform(showMessage = true) {
   currentY = angle.y;
   currentZ = angle.z;
 
-  shiomiMindAR.setAttribute("position", currentX + " " + currentY + " " + currentZ);
-  shiomiMindAR.setAttribute("rotation", angle.rotX + " 0 " + rotZ);
-  shiomiMindAR.setAttribute("scale", currentScale + " " + currentScale + " " + currentScale);
+  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
+  modelHolder.setAttribute("rotation", angle.rotX + " 0 " + rotZ);
+  modelHolder.setAttribute("scale", currentScale + " " + currentScale + " " + currentScale);
 
   if (showMessage) {
     statusEl.textContent =
       "MindAR表示を調整しました。\n" +
-      "scale: " + currentScale.toFixed(3) + "\n" +
+      "scale: " + currentScale.toFixed(5) + "\n" +
       "X: " + currentX.toFixed(3) + "\n" +
       "Y: " + currentY.toFixed(3) + "\n" +
       "Z: " + currentZ.toFixed(3) + "\n" +
@@ -533,28 +602,34 @@ function applyMindARTransform(showMessage = true) {
 }
 
 largerBtn.addEventListener("click", () => {
-  currentScale = Math.min(20, currentScale * 1.2);
+  currentScale = Math.min(1000, currentScale * 1.2);
   applyMindARTransform();
 });
 
 smallerBtn.addEventListener("click", () => {
-  currentScale = Math.max(0.001, currentScale / 1.2);
+  currentScale = Math.max(0.00001, currentScale / 1.2);
   applyMindARTransform();
 });
 
 frontBtn.addEventListener("click", () => {
   currentZ += 0.08;
-  applyMindARTransform();
+  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
+  statusEl.textContent =
+    "全体を前へ移動しました。\n" +
+    "Z: " + currentZ.toFixed(3);
 });
 
 backBtn.addEventListener("click", () => {
   currentZ -= 0.08;
-  applyMindARTransform();
+  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
+  statusEl.textContent =
+    "全体を奥へ移動しました。\n" +
+    "Z: " + currentZ.toFixed(3);
 });
 
 upBtn.addEventListener("click", () => {
   currentY += 0.08;
-  shiomiMindAR.setAttribute("position", currentX + " " + currentY + " " + currentZ);
+  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
   statusEl.textContent =
     "全体を上へ移動しました。\n" +
     "Y: " + currentY.toFixed(3);
@@ -562,7 +637,7 @@ upBtn.addEventListener("click", () => {
 
 downBtn.addEventListener("click", () => {
   currentY -= 0.08;
-  shiomiMindAR.setAttribute("position", currentX + " " + currentY + " " + currentZ);
+  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
   statusEl.textContent =
     "全体を下へ移動しました。\n" +
     "Y: " + currentY.toFixed(3);
@@ -587,23 +662,25 @@ angleBtn.addEventListener("click", () => {
 });
 
 resetBtn.addEventListener("click", () => {
-  currentScale = 0.78;
+  currentScale = autoFitScale || 1.0;
   currentX = 0.0;
   currentY = 0.0;
   currentZ = 0.28;
   yawMode = 0;
   angleMode = 0;
+
   applyMindARTransform(false);
 
   statusEl.textContent =
     "MindAR表示をリセットしました。\n" +
-    "固定ARモードは閉じていません。";
+    "自動スケール値に戻しました。";
 });
 
 fixedModeBtn.addEventListener("click", async () => {
   wasMindARActiveBeforeFixed = arStarted;
 
   const sys = sceneEl.systems["mindar-image-system"];
+
   if (sys && arStarted) {
     sys.stop();
     arStarted = false;
@@ -617,18 +694,6 @@ fixedModeBtn.addEventListener("click", async () => {
     "固定ARモードを表示しました。\n" +
     "画面下の「ARで床・机に配置」を押してください。\n" +
     "このモードではデフォルトの shiomi_city.glb を使用します。";
-
-  if (fixedViewer && typeof fixedViewer.activateAR === "function") {
-    try {
-      await fixedViewer.activateAR();
-    } catch (e) {
-      console.warn(e);
-      statusEl.textContent =
-        "固定ARモードを表示しました。\n" +
-        "自動起動はできませんでした。\n" +
-        "画面下の「ARで床・机に配置」を押してください。";
-    }
-  }
 });
 
 fixedCloseBtn.addEventListener("click", async () => {
@@ -636,6 +701,7 @@ fixedCloseBtn.addEventListener("click", async () => {
 
   if (wasMindARActiveBeforeFixed) {
     const sys = await waitForMindARSystem();
+
     if (sys) {
       try {
         targetGuide.style.display = "block";
@@ -663,7 +729,7 @@ markerEl.addEventListener("targetFound", () => {
   targetGuide.style.display = "none";
   foundBanner.style.display = "block";
 
-  shiomiMindAR.setAttribute("visible", "true");
+  modelHolder.setAttribute("visible", "true");
 
   statusEl.textContent =
     "潮見ジオラマを発見しました。\n" +
@@ -692,6 +758,7 @@ async function waitForMindARSystem() {
     if (sys) return sys;
     await new Promise(r => setTimeout(r, 200));
   }
+
   return null;
 }
 
@@ -790,7 +857,8 @@ checkBtn.addEventListener("click", async () => {
     "modelLoaded: " + modelLoaded + "\n" +
     "fixedViewer: " + Boolean(fixedViewer) + "\n" +
     "arStarted: " + arStarted + "\n" +
-    "scale: " + currentScale.toFixed(3) + "\n" +
+    "currentScale: " + currentScale.toFixed(6) + "\n" +
+    "autoFitScale: " + autoFitScale.toFixed(6) + "\n" +
     "X: " + currentX.toFixed(3) + "\n" +
     "Y: " + currentY.toFixed(3) + "\n" +
     "Z: " + currentZ.toFixed(3) + "\n" +
