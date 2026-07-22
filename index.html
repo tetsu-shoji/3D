@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR 起動診断付き完全版</title>
+<title>潮見ジオラマ AR 固定表示対応版</title>
 
 <script>
 window.__startupErrorText = '';
@@ -136,6 +136,8 @@ button:active {
 #rotateBtn { background: #673ab7; color: #fff; }
 #angleBtn { background: #009688; color: #fff; }
 #heightResetBtn { background: #607d8b; color: #fff; }
+#pinBtn { background: #1565c0; color: #fff; }
+#clearPinBtn { background: #424242; color: #fff; }
 #checkBtn { background: #00a36c; color: #fff; }
 
 #buildingUpBtn, #buildingDownBtn { background: #eeeeee; color: #111; }
@@ -231,6 +233,10 @@ button:active {
     <button id="rotateBtn">180度回転</button>
     <button id="angleBtn">角度切替</button>
     <button id="colorBtn">色切替</button>
+
+    <button id="pinBtn">この位置に固定</button>
+    <button id="clearPinBtn">固定解除</button>
+
     <button id="resetBtn">表示リセット</button>
     <button id="checkBtn">確認</button>
   </div>
@@ -305,6 +311,10 @@ button:active {
     </a-text>
 
   </a-entity>
+
+  <!-- 名刺ターゲットの外側。固定表示用 -->
+  <a-entity id="pinnedRoot" visible="false"></a-entity>
+
 </a-scene>
 
 <script>
@@ -314,6 +324,7 @@ const originalEl = document.querySelector('#shiomiOriginal');
 const modelRoot = document.querySelector('#modelRoot');
 const modelBounds = document.querySelector('#modelBounds');
 const debugBox = document.querySelector('#debugBox');
+const pinnedRoot = document.querySelector('#pinnedRoot');
 
 const startBtn = document.querySelector('#startBtn');
 const stopBtn = document.querySelector('#stopBtn');
@@ -339,6 +350,8 @@ const heightResetBtn = document.querySelector('#heightResetBtn');
 const rotateBtn = document.querySelector('#rotateBtn');
 const angleBtn = document.querySelector('#angleBtn');
 const colorBtn = document.querySelector('#colorBtn');
+const pinBtn = document.querySelector('#pinBtn');
+const clearPinBtn = document.querySelector('#clearPinBtn');
 const resetBtn = document.querySelector('#resetBtn');
 const checkBtn = document.querySelector('#checkBtn');
 
@@ -368,14 +381,11 @@ let colorMode = 0;
 let yawMode = 0;
 let angleMode = 0;
 
-/*
-  地面を足の裏側から見ているような状態を直すため、
-  モデル全体をX軸180度反転。
-  初期角度は0度なので、名刺面と地面は平行表示。
-*/
 let baseFlipXDeg = 180;
-
 let buildingSplitRatio = 0.18;
+
+let isPinned = false;
+let pinnedGroup = null;
 
 let layerHeightOffset = {
   land: -0.006,
@@ -442,8 +452,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!sceneLoaded) {
       statusEl.textContent =
         'A-Frameシーンのloadedイベントを待っています。\n' +
-        'この表示が続く場合は、CDN読み込み、scriptタグ、またはHTML構文を確認してください。\n' +
-        '確認ポイント：A-Frame / MindAR のscriptタグがhref化していないか。';
+        'この表示が続く場合は、CDN読み込み、scriptタグ、またはHTML構文を確認してください。';
     }
   }, 4000);
 });
@@ -452,8 +461,7 @@ window.addEventListener('load', () => {
   if (!sceneLoaded) {
     statusEl.textContent =
       'ページ全体は読み込まれましたが、A-Frameシーンの初期化待ちです。\n' +
-      '少し待ってから開始ボタンを押してください。\n' +
-      '進まない場合は画面に出るJavaScriptエラーを確認してください。';
+      '少し待ってから開始ボタンを押してください。';
   }
 });
 
@@ -739,7 +747,10 @@ function makeSolidMaterialForLayer(colorValue, layerType) {
 
   return new THREE.MeshStandardMaterial({
     color: colorValue,
-    side: layerType === 'building' ? THREE.DoubleSide : THREE.FrontSide,
+
+    // 土地・道路が消えないように全レイヤー両面表示
+    side: THREE.DoubleSide,
+
     roughness: 0.82,
     metalness: 0.02,
     flatShading: true,
@@ -927,7 +938,8 @@ function extractMeshesToProxy(preserveTransform = true) {
   statusEl.textContent =
     'モデルを表示しました。\n' +
     'X軸180度反転＋平行表示です。\n' +
-    '建物には陰影が出る材質を使用しています。\n' +
+    '土地・道路・建物はすべて両面表示です。\n' +
+    '固定したい場合は「この位置に固定」を押してください。\n' +
     '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
     '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
     '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
@@ -991,6 +1003,67 @@ function adjustBuildingSplit(delta) {
   buildingSplitRatio += delta;
   buildingSplitRatio = Math.max(0.02, Math.min(0.80, buildingSplitRatio));
   extractMeshesToProxy(true);
+}
+
+function pinCurrentModelPosition() {
+  if (!proxyGroup) {
+    statusEl.textContent =
+      'まだモデルが生成されていません。\n' +
+      '名刺を認識してモデルが表示されてから固定してください。';
+    return;
+  }
+
+  if (pinnedGroup) {
+    pinnedRoot.object3D.remove(pinnedGroup);
+    pinnedGroup = null;
+  }
+
+  pinnedGroup = proxyGroup.clone(true);
+
+  pinnedGroup.traverse((node) => {
+    node.visible = true;
+    node.frustumCulled = false;
+  });
+
+  modelRoot.object3D.updateWorldMatrix(true, true);
+
+  pinnedRoot.object3D.matrixAutoUpdate = false;
+  pinnedRoot.object3D.matrix.copy(modelRoot.object3D.matrixWorld);
+
+  pinnedRoot.object3D.add(pinnedGroup);
+  pinnedRoot.setAttribute('visible', 'true');
+
+  isPinned = true;
+
+  modelRoot.setAttribute('visible', 'false');
+
+  statusEl.textContent =
+    '現在の位置にモデルを固定しました。\n' +
+    '名刺を画面外にしても固定モデルを表示し続けます。\n' +
+    'これはMindAR上の簡易固定であり、完全な床・机へのSLAM固定ではありません。';
+}
+
+function clearPinnedModel() {
+  if (pinnedGroup) {
+    pinnedRoot.object3D.remove(pinnedGroup);
+    pinnedGroup = null;
+  }
+
+  pinnedRoot.setAttribute('visible', 'false');
+
+  pinnedRoot.object3D.matrix.identity();
+  pinnedRoot.object3D.matrixAutoUpdate = true;
+  pinnedRoot.object3D.position.set(0, 0, 0);
+  pinnedRoot.object3D.rotation.set(0, 0, 0);
+  pinnedRoot.object3D.scale.set(1, 1, 1);
+
+  isPinned = false;
+
+  modelRoot.setAttribute('visible', 'true');
+
+  statusEl.textContent =
+    '固定を解除しました。\n' +
+    '名刺を認識すると、モデルは再び名刺に追従します。';
 }
 
 largerBtn.addEventListener('click', () => {
@@ -1099,6 +1172,14 @@ colorBtn.addEventListener('click', () => {
   extractMeshesToProxy(true);
 });
 
+pinBtn.addEventListener('click', () => {
+  pinCurrentModelPosition();
+});
+
+clearPinBtn.addEventListener('click', () => {
+  clearPinnedModel();
+});
+
 resetBtn.addEventListener('click', () => {
   rootScale = 1.0;
   currentX = 0.0;
@@ -1114,6 +1195,8 @@ resetBtn.addEventListener('click', () => {
     other: defaultLayerHeightOffset.other
   };
 
+  clearPinnedModel();
+
   const mode = angleModes[angleMode];
   currentY = mode.y;
   currentZ = mode.z;
@@ -1122,25 +1205,36 @@ resetBtn.addEventListener('click', () => {
 
   statusEl.textContent =
     '表示リセットしました。\n' +
-    'X軸180度反転、平行表示に戻しました。';
+    'X軸180度反転、平行表示に戻しました。\n' +
+    '固定も解除しました。';
 });
 
 markerEl.addEventListener('targetFound', () => {
   targetGuide.style.display = 'none';
   foundBanner.style.display = 'block';
 
-  modelRoot.setAttribute('visible', 'true');
   modelBounds.setAttribute('visible', 'false');
   debugBox.setAttribute('visible', 'false');
 
-  if (!proxyGroup && modelLoaded) {
-    extractMeshesToProxy(false);
-  }
+  if (isPinned) {
+    modelRoot.setAttribute('visible', 'false');
+    pinnedRoot.setAttribute('visible', 'true');
 
-  statusEl.textContent =
-    '潮見ジオラマを発見しました。\n' +
-    'X軸180度反転＋平行表示で表示しています。\n' +
-    '建物が出ない場合は「建物判定－」、建物が低い場合は「建物↑」を押してください。';
+    statusEl.textContent =
+      '名刺を再認識しました。\n' +
+      '現在は固定表示中です。\n' +
+      '追従表示に戻す場合は「固定解除」を押してください。';
+  } else {
+    modelRoot.setAttribute('visible', 'true');
+
+    if (!proxyGroup && modelLoaded) {
+      extractMeshesToProxy(false);
+    }
+
+    statusEl.textContent =
+      '潮見ジオラマを発見しました。\n' +
+      '固定したい場合は「この位置に固定」を押してください。';
+  }
 
   setTimeout(() => {
     foundBanner.style.display = 'none';
@@ -1151,6 +1245,18 @@ markerEl.addEventListener('targetLost', () => {
   if (!arStarted) return;
 
   foundBanner.style.display = 'none';
+
+  if (isPinned) {
+    targetGuide.style.display = 'none';
+    pinnedRoot.setAttribute('visible', 'true');
+    modelRoot.setAttribute('visible', 'false');
+
+    statusEl.textContent =
+      '名刺を見失いましたが、固定モデルを表示しています。\n' +
+      '追従表示に戻す場合は「固定解除」を押してください。';
+    return;
+  }
+
   targetGuide.style.display = 'block';
 
   statusEl.textContent =
@@ -1256,6 +1362,7 @@ checkBtn.addEventListener('click', () => {
     'source visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
     'proxyGroup: ' + Boolean(proxyGroup) + '\n' +
     'proxy children: ' + proxyChildren + '\n' +
+    'isPinned: ' + isPinned + '\n' +
     'rootScale: ' + rootScale.toFixed(3) + '\n' +
     'innerScale: ' + innerScale.toFixed(4) + '\n' +
     'X: ' + currentX.toFixed(3) + '\n' +
