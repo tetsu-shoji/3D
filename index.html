@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR MindAR＋固定AR切替版</title>
+<title>潮見ジオラマ AR MindAR＋固定AR安定版</title>
 
 <script>
 window.__startupErrorText = "";
@@ -134,19 +134,12 @@ button:active {
 
 #startBtn { background: #c40000; color: #fff; }
 #stopBtn { background: #333; color: #fff; }
-#resetBtn { background: #005bd3; color: #fff; }
 #fixedModeBtn { background: #1565c0; color: #fff; }
 #fixedCloseBtn { background: #424242; color: #fff; }
-#colorBtn { background: #ff9800; color: #fff; }
+#resetBtn { background: #005bd3; color: #fff; }
+#checkBtn { background: #00a36c; color: #fff; }
 #rotateBtn { background: #673ab7; color: #fff; }
 #angleBtn { background: #009688; color: #fff; }
-#heightResetBtn { background: #607d8b; color: #fff; }
-#checkBtn { background: #00a36c; color: #fff; }
-
-#buildingUpBtn, #buildingDownBtn { background: #eeeeee; color: #111; }
-#roadUpBtn, #roadDownBtn { background: #ffd54f; color: #111; }
-#landUpBtn, #landDownBtn { background: #81c784; color: #111; }
-#splitUpBtn, #splitDownBtn { background: #ce93d8; color: #111; }
 
 #status {
   position: fixed;
@@ -274,6 +267,7 @@ button:active {
 </head>
 
 <body>
+
 <div id="ui">
   <div id="topPanel">
     <button id="startBtn">開始</button>
@@ -286,20 +280,8 @@ button:active {
     <button id="upBtn">全体上へ</button>
     <button id="downBtn">全体下へ</button>
 
-    <button id="buildingUpBtn">建物↑</button>
-    <button id="buildingDownBtn">建物↓</button>
-    <button id="roadUpBtn">道路↑</button>
-    <button id="roadDownBtn">道路↓</button>
-    <button id="landUpBtn">土地↑</button>
-    <button id="landDownBtn">土地↓</button>
-
-    <button id="splitDownBtn">建物判定－</button>
-    <button id="splitUpBtn">建物判定＋</button>
-    <button id="heightResetBtn">高さリセット</button>
-
     <button id="rotateBtn">180度回転</button>
     <button id="angleBtn">角度切替</button>
-    <button id="colorBtn">色切替</button>
 
     <button id="fixedModeBtn">床・机に固定AR</button>
 
@@ -320,7 +302,11 @@ button:active {
 
   <div id="fixedViewerArea">
     ./shiomi_city.glb
-      <button id="arLaunchBtn" slot="ar-button">ARで床・机に配置</button>
+
+      <button id="arLaunchBtn" slot="ar-button">
+        ARで床・机に配置
+      </button>
+
     </model-viewer>
 
     <div id="fixedButtons">
@@ -347,47 +333,17 @@ button:active {
 
   <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
 
-    <a-light type="ambient" intensity="1.10"></a-light>
-    <a-light type="directional" intensity="2.3" position="0.9 1.4 2.0"></a-light>
-    <a-light type="directional" intensity="0.9" position="-1.2 -0.4 1.2"></a-light>
-    <a-light type="point" intensity="1.0" position="0 0 1"></a-light>
-
-    <a-box
-      id="debugBox"
-      visible="false"
-      position="0 0 0.08"
-      width="0.07"
-      height="0.07"
-      depth="0.07"
-      color="#ff0000">
-    </a-box>
-
-    <a-box
-      id="modelBounds"
-      visible="false"
-      position="0 0 0.28"
-      width="0.8"
-      height="0.8"
-      depth="0.8"
-      material="color: #00ffff; wireframe: true; transparent: true; opacity: 0.6;">
-    </a-box>
+    <a-light type="ambient" intensity="1.4"></a-light>
+    <a-light type="directional" intensity="2.2" position="0.9 1.4 2.0"></a-light>
+    <a-light type="directional" intensity="0.8" position="-1.2 -0.4 1.2"></a-light>
 
     <a-entity
-      id="modelRoot"
-      position="0 0 0.28"
-      rotation="0 0 0"
-      scale="1 1 1"
-      visible="true">
-    </a-entity>
-
-    <a-entity
-      id="shiomiOriginal"
+      id="shiomiMindAR"
       gltf-model="url(./shiomi_city.glb)"
-      position="0 0 0"
-      rotation="0 0 0"
-      scale="1 1 1"
-      visible="false"
-      animation-mixer>
+      position="0 0 0.28"
+      rotation="180 0 0"
+      scale="0.78 0.78 0.78"
+      visible="true">
     </a-entity>
 
     <a-text
@@ -404,10 +360,7 @@ button:active {
 <script>
 const sceneEl = document.querySelector("#arScene");
 const markerEl = document.querySelector("#markerTarget");
-const originalEl = document.querySelector("#shiomiOriginal");
-const modelRoot = document.querySelector("#modelRoot");
-const modelBounds = document.querySelector("#modelBounds");
-const debugBox = document.querySelector("#debugBox");
+const shiomiMindAR = document.querySelector("#shiomiMindAR");
 
 const startBtn = document.querySelector("#startBtn");
 const stopBtn = document.querySelector("#stopBtn");
@@ -419,27 +372,16 @@ const backBtn = document.querySelector("#backBtn");
 const upBtn = document.querySelector("#upBtn");
 const downBtn = document.querySelector("#downBtn");
 
-const buildingUpBtn = document.querySelector("#buildingUpBtn");
-const buildingDownBtn = document.querySelector("#buildingDownBtn");
-const roadUpBtn = document.querySelector("#roadUpBtn");
-const roadDownBtn = document.querySelector("#roadDownBtn");
-const landUpBtn = document.querySelector("#landUpBtn");
-const landDownBtn = document.querySelector("#landDownBtn");
-
-const splitUpBtn = document.querySelector("#splitUpBtn");
-const splitDownBtn = document.querySelector("#splitDownBtn");
-const heightResetBtn = document.querySelector("#heightResetBtn");
-
 const rotateBtn = document.querySelector("#rotateBtn");
 const angleBtn = document.querySelector("#angleBtn");
-const colorBtn = document.querySelector("#colorBtn");
-const resetBtn = document.querySelector("#resetBtn");
-const checkBtn = document.querySelector("#checkBtn");
 
 const fixedModeBtn = document.querySelector("#fixedModeBtn");
 const fixedViewerOverlay = document.querySelector("#fixedViewerOverlay");
 const fixedViewer = document.querySelector("#fixedViewer");
 const fixedCloseBtn = document.querySelector("#fixedCloseBtn");
+
+const resetBtn = document.querySelector("#resetBtn");
+const checkBtn = document.querySelector("#checkBtn");
 
 const statusEl = document.querySelector("#status");
 const targetGuide = document.querySelector("#targetGuide");
@@ -450,51 +392,32 @@ let modelLoaded = false;
 let arStarted = false;
 let wasMindARActiveBeforeFixed = false;
 
-let rootScale = 1.0;
+let currentScale = 0.78;
 let currentX = 0.0;
-let currentY = 0.00;
+let currentY = 0.0;
 let currentZ = 0.28;
-
-let proxyGroup = null;
-let proxyMeshCount = 0;
-let sourceMeshCount = 0;
-let visibleSourceMeshCount = 0;
-let childCount = 0;
-let innerScale = 1.0;
-let boxSizeText = "";
-let boxCenterText = "";
-
-let colorMode = 0;
 let yawMode = 0;
 let angleMode = 0;
 
-let baseFlipXDeg = 180;
-let buildingSplitRatio = 0.18;
-
-let layerHeightOffset = {
-  land: -0.006,
-  road: 0.055,
-  building: -0.060,
-  other: 0.030
-};
-
-const defaultLayerHeightOffset = {
-  land: -0.006,
-  road: 0.055,
-  building: -0.060,
-  other: 0.030
-};
-
-const colorSets = [
-  { land: 0x4caf50, building: 0xd8d8d8, road: 0xf9c74f, other: 0x90caf9 },
-  { land: 0x66bb6a, building: 0xf0f0f0, road: 0xffca28, other: 0x64b5f6 },
-  { land: 0x6abf69, building: 0xcfcfcf, road: 0x8d6e63, other: 0x90caf9 }
-];
-
 const angleModes = [
-  { name: "平行表示", pitchDeg: 0, z: 0.28, y: 0.00 },
-  { name: "やや斜め", pitchDeg: -18, z: 0.36, y: 0.04 },
-  { name: "ローアングル", pitchDeg: -32, z: 0.48, y: 0.08 }
+  {
+    name: "平行表示",
+    rotX: 180,
+    z: 0.28,
+    y: 0.00
+  },
+  {
+    name: "やや斜め",
+    rotX: 162,
+    z: 0.36,
+    y: 0.04
+  },
+  {
+    name: "ローアングル",
+    rotX: 148,
+    z: 0.48,
+    y: 0.08
+  }
 ];
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -523,27 +446,23 @@ sceneEl.addEventListener("loaded", () => {
   sceneLoaded = true;
   statusEl.textContent =
     "A-Frameシーンを読み込みました。\n" +
-    "MindARモードでは±ボタン等で調整できます。\n" +
+    "MindARモードでは＋／－等で操作できます。\n" +
     "床・机に固定したい場合は「床・机に固定AR」を押してください。";
 });
 
-originalEl.addEventListener("model-loaded", () => {
+shiomiMindAR.addEventListener("model-loaded", () => {
   modelLoaded = true;
   statusEl.textContent =
-    "GLBを読み込みました。\n" +
-    "メッシュを生成しています。";
-
-  setTimeout(() => {
-    extractMeshesToProxy(false);
-  }, 500);
+    "shiomi_city.glb を読み込みました。\n" +
+    "開始ボタンを押して名刺マーカーにかざしてください。";
 });
 
-originalEl.addEventListener("model-error", (e) => {
+shiomiMindAR.addEventListener("model-error", (e) => {
   console.error("model-error", e);
   modelLoaded = false;
   statusEl.textContent =
-    "GLBの読み込みに失敗しました。\n" +
-    "shiomi_city.glb が index.html と同じフォルダにあるか確認してください。";
+    "shiomi_city.glb の読み込みに失敗しました。\n" +
+    "index.html と同じフォルダに shiomi_city.glb があるか確認してください。";
 });
 
 if (fixedViewer) {
@@ -563,7 +482,7 @@ if (fixedViewer) {
     if (status === "session-started") {
       statusEl.textContent =
         "固定ARを開始しました。\n" +
-        "床・机などの水平面を認識して、デフォルトモデルを配置してください。";
+        "床・机などの水平面を認識して、モデルを配置してください。";
     }
 
     if (status === "object-placed") {
@@ -590,566 +509,68 @@ if (fixedViewer) {
     "<model-viewer id=\"fixedViewer\"> のタグを確認してください。";
 }
 
-function countSourceMeshes() {
-  const obj = originalEl.object3D;
-  let c = 0;
-  let m = 0;
-  let v = 0;
-
-  obj.traverse((node) => {
-    c++;
-    if (node.isMesh) {
-      m++;
-      if (node.visible) v++;
-    }
-  });
-
-  childCount = c;
-  sourceMeshCount = m;
-  visibleSourceMeshCount = v;
-
-  return { childCount: c, meshCount: m, visibleMeshCount: v };
-}
-
-function clearProxyGroup() {
-  if (proxyGroup) {
-    modelRoot.object3D.remove(proxyGroup);
-
-    proxyGroup.traverse((node) => {
-      if (node.geometry) node.geometry.dispose();
-      if (node.material) {
-        if (Array.isArray(node.material)) {
-          node.material.forEach(mat => mat.dispose());
-        } else {
-          node.material.dispose();
-        }
-      }
-    });
-
-    proxyGroup = null;
-    proxyMeshCount = 0;
-  }
-}
-
-function getGeometryVolume(geom) {
-  geom.computeBoundingBox();
-  if (!geom.boundingBox) return 0;
-
-  const size = new AFRAME.THREE.Vector3();
-  geom.boundingBox.getSize(size);
-
-  return Math.abs(size.x * size.y * size.z);
-}
-
-function remapYUpToARZUp(geom) {
-  const position = geom.attributes.position;
-  if (!position) return;
-
-  for (let i = 0; i < position.count; i++) {
-    position.setXYZ(i, position.getX(i), position.getY(i), position.getZ(i));
-  }
-
-  position.needsUpdate = true;
-  geom.computeVertexNormals();
-  geom.computeBoundingBox();
-}
-
-function splitGeometryByHeight(sourceGeom, thresholdRatio) {
-  const THREE = AFRAME.THREE;
-
-  const geom = sourceGeom.clone();
-  geom.computeBoundingBox();
-
-  if (!geom.boundingBox) {
-    return { low: geom, high: null };
-  }
-
-  const box = geom.boundingBox;
-  const minZ = box.min.z;
-  const maxZ = box.max.z;
-  const thresholdZ = minZ + (maxZ - minZ) * thresholdRatio;
-
-  const pos = geom.attributes.position;
-  const indexAttr = geom.index;
-
-  const lowPositions = [];
-  const highPositions = [];
-
-  function pushTriangle(target, ax, ay, az, bx, by, bz, cx, cy, cz) {
-    target.push(ax, ay, az, bx, by, bz, cx, cy, cz);
-  }
-
-  if (indexAttr) {
-    for (let i = 0; i < indexAttr.count; i += 3) {
-      const ia = indexAttr.getX(i);
-      const ib = indexAttr.getX(i + 1);
-      const ic = indexAttr.getX(i + 2);
-
-      const ax = pos.getX(ia);
-      const ay = pos.getY(ia);
-      const az = pos.getZ(ia);
-
-      const bx = pos.getX(ib);
-      const by = pos.getY(ib);
-      const bz = pos.getZ(ib);
-
-      const cx = pos.getX(ic);
-      const cy = pos.getY(ic);
-      const cz = pos.getZ(ic);
-
-      const avgZ = (az + bz + cz) / 3;
-
-      if (avgZ >= thresholdZ) {
-        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
-      } else {
-        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
-      }
-    }
-  } else {
-    for (let i = 0; i < pos.count; i += 3) {
-      const ax = pos.getX(i);
-      const ay = pos.getY(i);
-      const az = pos.getZ(i);
-
-      const bx = pos.getX(i + 1);
-      const by = pos.getY(i + 1);
-      const bz = pos.getZ(i + 1);
-
-      const cx = pos.getX(i + 2);
-      const cy = pos.getY(i + 2);
-      const cz = pos.getZ(i + 2);
-
-      const avgZ = (az + bz + cz) / 3;
-
-      if (avgZ >= thresholdZ) {
-        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
-      } else {
-        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
-      }
-    }
-  }
-
-  function buildGeometry(positions) {
-    if (positions.length === 0) return null;
-
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    g.computeVertexNormals();
-    g.computeBoundingBox();
-    return g;
-  }
-
-  return { low: buildGeometry(lowPositions), high: buildGeometry(highPositions) };
-}
-
-function normalizeLayerHeight(geom, layerType) {
-  geom.computeBoundingBox();
-  if (!geom.boundingBox) return;
-
-  const box = geom.boundingBox;
-  const minZ = box.min.z;
-  const maxZ = box.max.z;
-
-  if (layerType === "land") {
-    geom.translate(0, 0, -maxZ + layerHeightOffset.land);
-    return;
-  }
-
-  if (layerType === "road") {
-    geom.translate(0, 0, -minZ + layerHeightOffset.road);
-    return;
-  }
-
-  if (layerType === "building") {
-    geom.translate(0, 0, -minZ + layerHeightOffset.building);
-    return;
-  }
-
-  geom.translate(0, 0, -minZ + layerHeightOffset.other);
-}
-
-function fixGeometryWindingToFaceUp(geom) {
-  if (!geom || !geom.attributes || !geom.attributes.position) return;
-
-  geom.computeVertexNormals();
-
-  const normalAttr = geom.attributes.normal;
-  if (!normalAttr) return;
-
-  let sumZ = 0;
-
-  for (let i = 0; i < normalAttr.count; i++) {
-    sumZ += normalAttr.getZ(i);
-  }
-
-  const avgZ = sumZ / normalAttr.count;
-
-  if (avgZ < 0) {
-    const pos = geom.attributes.position;
-    const indexAttr = geom.index;
-
-    if (indexAttr) {
-      for (let i = 0; i < indexAttr.count; i += 3) {
-        const b = indexAttr.getX(i + 1);
-        const c = indexAttr.getX(i + 2);
-        indexAttr.setX(i + 1, c);
-        indexAttr.setX(i + 2, b);
-      }
-      indexAttr.needsUpdate = true;
-    } else {
-      for (let i = 0; i < pos.count; i += 3) {
-        const bx = pos.getX(i + 1);
-        const by = pos.getY(i + 1);
-        const bz = pos.getZ(i + 1);
-
-        const cx = pos.getX(i + 2);
-        const cy = pos.getY(i + 2);
-        const cz = pos.getZ(i + 2);
-
-        pos.setXYZ(i + 1, cx, cy, cz);
-        pos.setXYZ(i + 2, bx, by, bz);
-      }
-      pos.needsUpdate = true;
-    }
-
-    geom.computeVertexNormals();
-    geom.computeBoundingBox();
-  }
-}
-
-function getLayerRenderOrder(layerType) {
-  if (layerType === "land") return 10;
-  if (layerType === "building") return 20;
-  if (layerType === "road") return 30;
-  return 25;
-}
-
-function makeSolidMaterialForLayer(colorValue, layerType) {
-  const THREE = AFRAME.THREE;
-
-  let polygonOffsetFactor = 0;
-  let polygonOffsetUnits = 0;
-
-  if (layerType === "road") {
-    polygonOffsetFactor = -8;
-    polygonOffsetUnits = -8;
-  } else if (layerType === "building") {
-    polygonOffsetFactor = -2;
-    polygonOffsetUnits = -2;
-  } else if (layerType === "land") {
-    polygonOffsetFactor = 2;
-    polygonOffsetUnits = 2;
-  }
-
-  return new THREE.MeshStandardMaterial({
-    color: colorValue,
-    side: THREE.DoubleSide,
-    roughness: 0.82,
-    metalness: 0.02,
-    flatShading: true,
-    transparent: false,
-    opacity: 1.0,
-    depthTest: true,
-    depthWrite: true,
-    polygonOffset: true,
-    polygonOffsetFactor: polygonOffsetFactor,
-    polygonOffsetUnits: polygonOffsetUnits
-  });
-}
-
-function addLayerMesh(geom, layerType) {
-  const THREE = AFRAME.THREE;
-  const colors = colorSets[colorMode % colorSets.length];
-
-  fixGeometryWindingToFaceUp(geom);
-
-  let colorValue = colors.other;
-  if (layerType === "land") colorValue = colors.land;
-  if (layerType === "building") colorValue = colors.building;
-  if (layerType === "road") colorValue = colors.road;
-
-  const material = makeSolidMaterialForLayer(colorValue, layerType);
-
-  const mesh = new THREE.Mesh(geom, material);
-  mesh.visible = true;
-  mesh.frustumCulled = false;
-  mesh.renderOrder = getLayerRenderOrder(layerType);
-
-  proxyGroup.add(mesh);
-}
-
-function updateProxyRotation() {
-  if (!proxyGroup) return;
-
-  const THREE = AFRAME.THREE;
-  const pitchDeg = angleModes[angleMode].pitchDeg;
-
-  const totalPitch = THREE.MathUtils.degToRad(baseFlipXDeg + pitchDeg);
-  const zYaw = yawMode % 2 === 0 ? 0 : Math.PI;
-
-  proxyGroup.rotation.set(totalPitch, 0, zYaw);
-}
-
-function extractMeshesToProxy(preserveTransform = true) {
-  const THREE = AFRAME.THREE;
-
-  clearProxyGroup();
-
-  const sourceRoot = originalEl.object3D;
-  sourceRoot.updateMatrixWorld(true);
-
-  const counts = countSourceMeshes();
-
-  if (counts.meshCount === 0) {
-    statusEl.textContent =
-      "元GLBのメッシュが0です。\n" +
-      "shiomi_city.glb の中身または読み込み状態を確認してください。";
-    return;
-  }
-
-  const inverseRootMatrix = sourceRoot.matrixWorld.clone().invert();
-
-  const items = [];
-  const totalBox = new THREE.Box3();
-  let hasBox = false;
-
-  sourceRoot.traverse((node) => {
-    if (!node.isMesh || !node.geometry) return;
-
-    const positionAttr = node.geometry.attributes.position;
-    if (!positionAttr || positionAttr.count === 0) return;
-
-    const geom = node.geometry.clone();
-
-    const relativeMatrix = new THREE.Matrix4().multiplyMatrices(
-      inverseRootMatrix,
-      node.matrixWorld
-    );
-
-    geom.applyMatrix4(relativeMatrix);
-    remapYUpToARZUp(geom);
-
-    geom.computeVertexNormals();
-    geom.computeBoundingBox();
-
-    if (geom.boundingBox) {
-      totalBox.union(geom.boundingBox);
-      hasBox = true;
-    }
-
-    items.push({
-      geometry: geom,
-      name: node.name || "",
-      volume: getGeometryVolume(geom)
-    });
-  });
-
-  if (!hasBox || items.length === 0) {
-    statusEl.textContent = "メッシュはありますが、頂点情報を取得できません。";
-    return;
-  }
-
-  items.sort((a, b) => b.volume - a.volume);
-
-  const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
-
-  totalBox.getSize(size);
-  totalBox.getCenter(center);
-
-  boxSizeText =
-    size.x.toFixed(4) + ", " +
-    size.y.toFixed(4) + ", " +
-    size.z.toFixed(4);
-
-  boxCenterText =
-    center.x.toFixed(4) + ", " +
-    center.y.toFixed(4) + ", " +
-    center.z.toFixed(4);
-
-  const maxDim = Math.max(size.x, size.y, size.z);
-
-  if (!isFinite(maxDim) || maxDim <= 0) {
-    statusEl.textContent =
-      "モデルサイズの計算に失敗しました。\n" +
-      "box size: " + boxSizeText;
-    return;
-  }
-
-  const desiredSize = 0.78;
-  innerScale = desiredSize / maxDim;
-  innerScale = Math.max(0.001, Math.min(200, innerScale));
-
-  proxyGroup = new THREE.Group();
-  proxyGroup.name = "shiomi_proxy_group";
-
-  items.forEach((item, index) => {
-    const baseGeom = item.geometry;
-
-    baseGeom.translate(-center.x, -center.y, -center.z);
-    baseGeom.scale(innerScale, innerScale, innerScale);
-
-    if (index === 0) {
-      const split = splitGeometryByHeight(baseGeom, buildingSplitRatio);
-
-      if (split.low) {
-        normalizeLayerHeight(split.low, "land");
-        addLayerMesh(split.low, "land");
-      }
-
-      if (split.high) {
-        normalizeLayerHeight(split.high, "building");
-        addLayerMesh(split.high, "building");
-      }
-    } else {
-      normalizeLayerHeight(baseGeom, "road");
-      addLayerMesh(baseGeom, "road");
-    }
-  });
-
-  proxyMeshCount = proxyGroup.children.length;
-
-  proxyGroup.position.set(0, 0, 0);
-  proxyGroup.scale.set(1, 1, 1);
-
-  modelRoot.object3D.add(proxyGroup);
-
-  originalEl.object3D.visible = false;
-  modelRoot.object3D.visible = true;
-
-  if (!preserveTransform) {
-    const mode = angleModes[angleMode];
-    currentY = mode.y;
-    currentZ = mode.z;
-    rootScale = 1.0;
-  }
-
-  updateProxyRotation();
-  applyRootTransform(false);
-
-  statusEl.textContent =
-    "MindARモデルを表示しました。\n" +
-    "MindARモードでは±ボタン・高さボタンで操作できます。\n" +
-    "固定したい場合は「床・机に固定AR」を押してください。\n" +
-    "建物高さの初期値は -0.060 です。\n" +
-    "建物判定: " + buildingSplitRatio.toFixed(2) + "\n" +
-    "土地: " + layerHeightOffset.land.toFixed(3) + "\n" +
-    "道路: " + layerHeightOffset.road.toFixed(3) + "\n" +
-    "建物: " + layerHeightOffset.building.toFixed(3) + "\n" +
-    "proxyMeshCount: " + proxyMeshCount;
-}
-
-function applyRootTransform(showMessage = true) {
-  modelRoot.object3D.position.set(currentX, currentY, currentZ);
-  modelRoot.object3D.scale.set(rootScale, rootScale, rootScale);
-
-  modelBounds.object3D.position.set(currentX, currentY, currentZ);
-  modelBounds.object3D.scale.set(rootScale, rootScale, rootScale);
+function applyMindARTransform(showMessage = true) {
+  const angle = angleModes[angleMode];
+  const rotZ = yawMode % 2 === 0 ? 0 : 180;
+
+  currentY = angle.y;
+  currentZ = angle.z;
+
+  shiomiMindAR.setAttribute("position", currentX + " " + currentY + " " + currentZ);
+  shiomiMindAR.setAttribute("rotation", angle.rotX + " 0 " + rotZ);
+  shiomiMindAR.setAttribute("scale", currentScale + " " + currentScale + " " + currentScale);
 
   if (showMessage) {
     statusEl.textContent =
-      "表示調整中です。\n" +
-      "rootScale: " + rootScale.toFixed(3) + "\n" +
+      "MindAR表示を調整しました。\n" +
+      "scale: " + currentScale.toFixed(3) + "\n" +
       "X: " + currentX.toFixed(3) + "\n" +
       "Y: " + currentY.toFixed(3) + "\n" +
       "Z: " + currentZ.toFixed(3) + "\n" +
-      "角度: " + angleModes[angleMode].name + "\n" +
-      "建物判定: " + buildingSplitRatio.toFixed(2) + "\n" +
-      "土地: " + layerHeightOffset.land.toFixed(3) + "\n" +
-      "道路: " + layerHeightOffset.road.toFixed(3) + "\n" +
-      "建物: " + layerHeightOffset.building.toFixed(3);
+      "角度: " + angle.name + "\n" +
+      "回転: " + (yawMode % 2 === 0 ? "0度" : "180度");
   }
 }
 
-function adjustLayerHeight(layer, delta) {
-  layerHeightOffset[layer] += delta;
-  extractMeshesToProxy(true);
-}
-
-function adjustBuildingSplit(delta) {
-  buildingSplitRatio += delta;
-  buildingSplitRatio = Math.max(0.02, Math.min(0.80, buildingSplitRatio));
-  extractMeshesToProxy(true);
-}
-
 largerBtn.addEventListener("click", () => {
-  rootScale = Math.min(50, rootScale * 1.20);
-  applyRootTransform();
+  currentScale = Math.min(20, currentScale * 1.2);
+  applyMindARTransform();
 });
 
 smallerBtn.addEventListener("click", () => {
-  rootScale = Math.max(0.001, rootScale / 1.20);
-  applyRootTransform();
+  currentScale = Math.max(0.001, currentScale / 1.2);
+  applyMindARTransform();
 });
 
 frontBtn.addEventListener("click", () => {
   currentZ += 0.08;
-  applyRootTransform();
+  applyMindARTransform();
 });
 
 backBtn.addEventListener("click", () => {
   currentZ -= 0.08;
-  applyRootTransform();
+  applyMindARTransform();
 });
 
 upBtn.addEventListener("click", () => {
   currentY += 0.08;
-  applyRootTransform();
+  shiomiMindAR.setAttribute("position", currentX + " " + currentY + " " + currentZ);
+  statusEl.textContent =
+    "全体を上へ移動しました。\n" +
+    "Y: " + currentY.toFixed(3);
 });
 
 downBtn.addEventListener("click", () => {
   currentY -= 0.08;
-  applyRootTransform();
-});
-
-buildingUpBtn.addEventListener("click", () => {
-  adjustLayerHeight("building", -0.020);
-});
-
-buildingDownBtn.addEventListener("click", () => {
-  adjustLayerHeight("building", 0.020);
-});
-
-roadUpBtn.addEventListener("click", () => {
-  adjustLayerHeight("road", 0.015);
-});
-
-roadDownBtn.addEventListener("click", () => {
-  adjustLayerHeight("road", -0.015);
-});
-
-landUpBtn.addEventListener("click", () => {
-  adjustLayerHeight("land", 0.015);
-});
-
-landDownBtn.addEventListener("click", () => {
-  adjustLayerHeight("land", -0.015);
-});
-
-splitDownBtn.addEventListener("click", () => {
-  adjustBuildingSplit(-0.03);
-});
-
-splitUpBtn.addEventListener("click", () => {
-  adjustBuildingSplit(0.03);
-});
-
-heightResetBtn.addEventListener("click", () => {
-  layerHeightOffset = {
-    land: defaultLayerHeightOffset.land,
-    road: defaultLayerHeightOffset.road,
-    building: defaultLayerHeightOffset.building,
-    other: defaultLayerHeightOffset.other
-  };
-
-  buildingSplitRatio = 0.18;
-  extractMeshesToProxy(true);
+  shiomiMindAR.setAttribute("position", currentX + " " + currentY + " " + currentZ);
+  statusEl.textContent =
+    "全体を下へ移動しました。\n" +
+    "Y: " + currentY.toFixed(3);
 });
 
 rotateBtn.addEventListener("click", () => {
   yawMode = (yawMode + 1) % 2;
-  updateProxyRotation();
-  applyRootTransform();
+  applyMindARTransform();
 
   statusEl.textContent =
     "モデルをZ軸で180度回転しました。\n" +
@@ -1158,51 +579,28 @@ rotateBtn.addEventListener("click", () => {
 
 angleBtn.addEventListener("click", () => {
   angleMode = (angleMode + 1) % angleModes.length;
-
-  const mode = angleModes[angleMode];
-  currentY = mode.y;
-  currentZ = mode.z;
-
-  updateProxyRotation();
-  applyRootTransform();
+  applyMindARTransform();
 
   statusEl.textContent =
     "角度を切り替えました。\n" +
-    "現在: " + mode.name;
-});
-
-colorBtn.addEventListener("click", () => {
-  colorMode = (colorMode + 1) % colorSets.length;
-  extractMeshesToProxy(true);
+    "現在: " + angleModes[angleMode].name;
 });
 
 resetBtn.addEventListener("click", () => {
-  rootScale = 1.0;
+  currentScale = 0.78;
   currentX = 0.0;
+  currentY = 0.0;
+  currentZ = 0.28;
   yawMode = 0;
   angleMode = 0;
-  baseFlipXDeg = 180;
-  buildingSplitRatio = 0.18;
-
-  layerHeightOffset = {
-    land: defaultLayerHeightOffset.land,
-    road: defaultLayerHeightOffset.road,
-    building: defaultLayerHeightOffset.building,
-    other: defaultLayerHeightOffset.other
-  };
-
-  const mode = angleModes[angleMode];
-  currentY = mode.y;
-  currentZ = mode.z;
-
-  extractMeshesToProxy(false);
+  applyMindARTransform(false);
 
   statusEl.textContent =
-    "表示リセットしました。\n" +
-    "MindARモードに戻しました。";
+    "MindAR表示をリセットしました。\n" +
+    "固定ARモードは閉じていません。";
 });
 
-fixedModeBtn.addEventListener("click", () => {
+fixedModeBtn.addEventListener("click", async () => {
   wasMindARActiveBeforeFixed = arStarted;
 
   const sys = sceneEl.systems["mindar-image-system"];
@@ -1219,6 +617,18 @@ fixedModeBtn.addEventListener("click", () => {
     "固定ARモードを表示しました。\n" +
     "画面下の「ARで床・机に配置」を押してください。\n" +
     "このモードではデフォルトの shiomi_city.glb を使用します。";
+
+  if (fixedViewer && typeof fixedViewer.activateAR === "function") {
+    try {
+      await fixedViewer.activateAR();
+    } catch (e) {
+      console.warn(e);
+      statusEl.textContent =
+        "固定ARモードを表示しました。\n" +
+        "自動起動はできませんでした。\n" +
+        "画面下の「ARで床・机に配置」を押してください。";
+    }
+  }
 });
 
 fixedCloseBtn.addEventListener("click", async () => {
@@ -1253,18 +663,11 @@ markerEl.addEventListener("targetFound", () => {
   targetGuide.style.display = "none";
   foundBanner.style.display = "block";
 
-  modelBounds.setAttribute("visible", "false");
-  debugBox.setAttribute("visible", "false");
-
-  modelRoot.setAttribute("visible", "true");
-
-  if (!proxyGroup && modelLoaded) {
-    extractMeshesToProxy(false);
-  }
+  shiomiMindAR.setAttribute("visible", "true");
 
   statusEl.textContent =
     "潮見ジオラマを発見しました。\n" +
-    "MindARモードでは±ボタン・高さボタンで操作できます。\n" +
+    "MindARモードでは＋／－等で操作できます。\n" +
     "床や机に固定したい場合は「床・机に固定AR」を押してください。";
 
   setTimeout(() => {
@@ -1280,8 +683,7 @@ markerEl.addEventListener("targetLost", () => {
 
   statusEl.textContent =
     "マーカーを見失いました。\n" +
-    "MindARモードでは、もう一度マーカーを画面中央に入れてください。\n" +
-    "床・机に固定したい場合は「床・机に固定AR」を使用してください。";
+    "MindARモードでは、もう一度マーカーを画面中央に入れてください。";
 });
 
 async function waitForMindARSystem() {
@@ -1364,7 +766,6 @@ stopBtn.addEventListener("click", () => {
 
 checkBtn.addEventListener("click", async () => {
   const mindar = sceneEl.systems["mindar-image-system"];
-  const counts = countSourceMeshes();
 
   let fileStatus = "";
 
@@ -1388,25 +789,13 @@ checkBtn.addEventListener("click", async () => {
     "MindAR: " + Boolean(mindar) + "\n" +
     "modelLoaded: " + modelLoaded + "\n" +
     "fixedViewer: " + Boolean(fixedViewer) + "\n" +
-    "source childCount: " + counts.childCount + "\n" +
-    "source meshCount: " + counts.meshCount + "\n" +
-    "source visibleMeshCount: " + counts.visibleMeshCount + "\n" +
-    "proxyGroup: " + Boolean(proxyGroup) + "\n" +
-    "proxyMeshCount: " + proxyMeshCount + "\n" +
-    "rootScale: " + rootScale.toFixed(3) + "\n" +
-    "innerScale: " + innerScale.toFixed(4) + "\n" +
+    "arStarted: " + arStarted + "\n" +
+    "scale: " + currentScale.toFixed(3) + "\n" +
     "X: " + currentX.toFixed(3) + "\n" +
     "Y: " + currentY.toFixed(3) + "\n" +
     "Z: " + currentZ.toFixed(3) + "\n" +
     "角度: " + angleModes[angleMode].name + "\n" +
-    "建物判定: " + buildingSplitRatio.toFixed(2) + "\n" +
-    "土地高さ: " + layerHeightOffset.land.toFixed(3) + "\n" +
-    "道路高さ: " + layerHeightOffset.road.toFixed(3) + "\n" +
-    "建物高さ: " + layerHeightOffset.building.toFixed(3) + "\n" +
-    "X軸反転: " + baseFlipXDeg + "度\n" +
-    "回転: " + (yawMode % 2 === 0 ? "0度" : "180度") + "\n" +
-    "box size: " + boxSizeText + "\n" +
-    "box center: " + boxCenterText + "\n\n" +
+    "回転: " + (yawMode % 2 === 0 ? "0度" : "180度") + "\n\n" +
     "ファイル確認:\n" +
     fileStatus;
 });
