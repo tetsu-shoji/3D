@@ -503,3 +503,680 @@ function splitGeometryByHeight(sourceGeom, thresholdRatio) {
   const highPositions = [];
 
   function pushTriangle(target, ax, ay, az, bx, by, bz, cx, cy, cz) {
+    target.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+  }
+
+  if (indexAttr) {
+    for (let i = 0; i < indexAttr.count; i += 3) {
+      const ia = indexAttr.getX(i);
+      const ib = indexAttr.getX(i + 1);
+      const ic = indexAttr.getX(i + 2);
+
+      const ax = pos.getX(ia);
+      const ay = pos.getY(ia);
+      const az = pos.getZ(ia);
+
+      const bx = pos.getX(ib);
+      const by = pos.getY(ib);
+      const bz = pos.getZ(ib);
+
+      const cx = pos.getX(ic);
+      const cy = pos.getY(ic);
+      const cz = pos.getZ(ic);
+
+      const avgZ = (az + bz + cz) / 3;
+
+      if (avgZ >= thresholdZ) {
+        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      } else {
+        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      }
+    }
+  } else {
+    for (let i = 0; i < pos.count; i += 3) {
+      const ax = pos.getX(i);
+      const ay = pos.getY(i);
+      const az = pos.getZ(i);
+
+      const bx = pos.getX(i + 1);
+      const by = pos.getY(i + 1);
+      const bz = pos.getZ(i + 1);
+
+      const cx = pos.getX(i + 2);
+      const cy = pos.getY(i + 2);
+      const cz = pos.getZ(i + 2);
+
+      const avgZ = (az + bz + cz) / 3;
+
+      if (avgZ >= thresholdZ) {
+        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      } else {
+        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      }
+    }
+  }
+
+  function buildGeometry(positions) {
+    if (positions.length === 0) return null;
+
+    const g = new THREE.BufferGeometry();
+    g.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
+
+    g.computeVertexNormals();
+    g.computeBoundingBox();
+    return g;
+  }
+
+  return {
+    low: buildGeometry(lowPositions),
+    high: buildGeometry(highPositions)
+  };
+}
+
+function normalizeLayerHeight(geom, layerType) {
+  geom.computeBoundingBox();
+
+  if (!geom.boundingBox) return;
+
+  const box = geom.boundingBox;
+  const minZ = box.min.z;
+  const maxZ = box.max.z;
+
+  if (layerType === 'land') {
+    geom.translate(0, 0, -maxZ + layerHeightOffset.land);
+    return;
+  }
+
+  if (layerType === 'road') {
+    geom.translate(0, 0, -minZ + layerHeightOffset.road);
+    return;
+  }
+
+  if (layerType === 'building') {
+    geom.translate(0, 0, -minZ + layerHeightOffset.building);
+    return;
+  }
+
+  geom.translate(0, 0, -minZ + layerHeightOffset.other);
+}
+
+function getLayerRenderOrder(layerType) {
+  if (layerType === 'land') return 10;
+  if (layerType === 'building') return 20;
+  if (layerType === 'road') return 30;
+  return 25;
+}
+
+function makeSolidMaterialForLayer(colorValue, layerType) {
+  const THREE = AFRAME.THREE;
+
+  let polygonOffsetFactor = 0;
+  let polygonOffsetUnits = 0;
+
+  if (layerType === 'road') {
+    polygonOffsetFactor = -8;
+    polygonOffsetUnits = -8;
+  } else if (layerType === 'building') {
+    polygonOffsetFactor = -2;
+    polygonOffsetUnits = -2;
+  } else if (layerType === 'land') {
+    polygonOffsetFactor = 2;
+    polygonOffsetUnits = 2;
+  }
+
+  /*
+    ここが今回の重要点：
+    MeshStandardMaterial + flatShading に戻す。
+    建物の箱状の面に、光によるうっすらした濃淡が出る。
+  */
+  return new THREE.MeshStandardMaterial({
+    color: colorValue,
+    side: THREE.DoubleSide,
+    roughness: 0.82,
+    metalness: 0.02,
+    flatShading: true,
+    transparent: false,
+    opacity: 1.0,
+    depthTest: true,
+    depthWrite: true,
+    polygonOffset: true,
+    polygonOffsetFactor: polygonOffsetFactor,
+    polygonOffsetUnits: polygonOffsetUnits
+  });
+}
+
+function addLayerMesh(geom, layerType) {
+  const THREE = AFRAME.THREE;
+  const colors = colorSets[colorMode % colorSets.length];
+
+  let colorValue = colors.other;
+  if (layerType === 'land') colorValue = colors.land;
+  if (layerType === 'building') colorValue = colors.building;
+  if (layerType === 'road') colorValue = colors.road;
+
+  const material = makeSolidMaterialForLayer(colorValue, layerType);
+
+  const mesh = new THREE.Mesh(geom, material);
+  mesh.visible = true;
+  mesh.frustumCulled = false;
+  mesh.renderOrder = getLayerRenderOrder(layerType);
+
+  proxyGroup.add(mesh);
+}
+
+function updateProxyRotation() {
+  if (!proxyGroup) return;
+
+  const THREE = AFRAME.THREE;
+
+  const pitchDeg = angleModes[angleMode].pitchDeg;
+  const totalPitch = THREE.MathUtils.degToRad(baseFlipXDeg + pitchDeg);
+
+  // 180度回転ボタンは地図面上の向き変更なのでZ軸回転
+  const zYaw = yawMode % 2 === 0 ? 0 : Math.PI;
+
+  proxyGroup.rotation.set(totalPitch, 0, zYaw);
+}
+
+function extractMeshesToProxy(preserveTransform = true) {
+  const THREE = AFRAME.THREE;
+
+  clearProxyGroup();
+
+  const sourceRoot = originalEl.object3D;
+  sourceRoot.updateMatrixWorld(true);
+
+  const counts = countSourceMeshes();
+
+  if (counts.meshCount === 0) {
+    statusEl.textContent =
+      '元GLBのメッシュが0です。\n' +
+      'GLB形式または中身を確認してください。';
+    return;
+  }
+
+  const inverseRootMatrix = sourceRoot.matrixWorld.clone().invert();
+
+  const items = [];
+  const totalBox = new THREE.Box3();
+  let hasBox = false;
+
+  sourceRoot.traverse((node) => {
+    if (!node.isMesh || !node.geometry) return;
+
+    const positionAttr = node.geometry.attributes.position;
+    if (!positionAttr || positionAttr.count === 0) return;
+
+    const geom = node.geometry.clone();
+
+    const relativeMatrix = new THREE.Matrix4().multiplyMatrices(
+      inverseRootMatrix,
+      node.matrixWorld
+    );
+
+    geom.applyMatrix4(relativeMatrix);
+    remapYUpToARZUp(geom);
+
+    geom.computeVertexNormals();
+    geom.computeBoundingBox();
+
+    if (geom.boundingBox) {
+      totalBox.union(geom.boundingBox);
+      hasBox = true;
+    }
+
+    items.push({
+      geometry: geom,
+      name: node.name || '',
+      volume: getGeometryVolume(geom)
+    });
+  });
+
+  if (!hasBox || items.length === 0) {
+    statusEl.textContent =
+      'メッシュはありますが、頂点情報を取得できません。\n' +
+      'GLBの中身に頂点がない可能性があります。';
+    return;
+  }
+
+  // 大きい順。最大メッシュを土地＋建物として分割する。
+  items.sort((a, b) => b.volume - a.volume);
+
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+
+  totalBox.getSize(size);
+  totalBox.getCenter(center);
+
+  boxSizeText =
+    size.x.toFixed(4) + ', ' +
+    size.y.toFixed(4) + ', ' +
+    size.z.toFixed(4);
+
+  boxCenterText =
+    center.x.toFixed(4) + ', ' +
+    center.y.toFixed(4) + ', ' +
+    center.z.toFixed(4);
+
+  const maxDim = Math.max(size.x, size.y, size.z);
+
+  if (!isFinite(maxDim) || maxDim <= 0) {
+    statusEl.textContent =
+      'モデルサイズの計算に失敗しました。\n' +
+      'box size: ' + boxSizeText;
+    return;
+  }
+
+  const desiredSize = 0.78;
+  innerScale = desiredSize / maxDim;
+  innerScale = Math.max(0.001, Math.min(200, innerScale));
+
+  proxyGroup = new THREE.Group();
+  proxyGroup.name = 'shiomi_proxy_group';
+
+  items.forEach((item, index) => {
+    const baseGeom = item.geometry;
+
+    // 中心補正
+    baseGeom.translate(-center.x, -center.y, -center.z);
+
+    // スケール
+    baseGeom.scale(innerScale, innerScale, innerScale);
+
+    if (index === 0) {
+      // 最大メッシュは土地＋建物なので、高さで分割
+      const split = splitGeometryByHeight(baseGeom, buildingSplitRatio);
+
+      if (split.low) {
+        normalizeLayerHeight(split.low, 'land');
+        addLayerMesh(split.low, 'land');
+      }
+
+      if (split.high) {
+        normalizeLayerHeight(split.high, 'building');
+        addLayerMesh(split.high, 'building');
+      }
+    } else {
+      // それ以外は道路扱い
+      normalizeLayerHeight(baseGeom, 'road');
+      addLayerMesh(baseGeom, 'road');
+    }
+  });
+
+  proxyMeshCount = proxyGroup.children.length;
+
+  proxyGroup.position.set(0, 0, 0);
+  proxyGroup.scale.set(1, 1, 1);
+
+  modelRoot.object3D.add(proxyGroup);
+
+  originalEl.object3D.visible = false;
+  modelRoot.object3D.visible = true;
+
+  if (!preserveTransform) {
+    const mode = angleModes[angleMode];
+    currentY = mode.y;
+    currentZ = mode.z;
+    rootScale = 1.0;
+  }
+
+  updateProxyRotation();
+  applyRootTransform(false);
+
+  statusEl.textContent =
+    '平行表示・陰影版で更新しました。\n' +
+    '全体向きは初期段階に近い平行表示に戻しています。\n' +
+    '建物はMeshStandardMaterialで、面ごとにうっすら陰影が出ます。\n' +
+    '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
+    '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+    '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+    '建物: ' + layerHeightOffset.building.toFixed(3) + '\n' +
+    'proxyMeshCount: ' + proxyMeshCount;
+}
+
+originalEl.addEventListener('model-loaded', () => {
+  modelLoaded = true;
+
+  statusEl.textContent =
+    'GLBを読み込みました。\n' +
+    '自動で高さ分割メッシュを生成します。';
+
+  setTimeout(() => {
+    extractMeshesToProxy(false);
+  }, 500);
+});
+
+originalEl.addEventListener('model-error', (e) => {
+  console.error('model-error', e);
+
+  modelLoaded = false;
+
+  statusEl.textContent =
+    'GLBの読み込みに失敗しました。\n' +
+    '確認してください：\n' +
+    '1. shiomi_city.glb が index.html と同じフォルダにあるか\n' +
+    '2. ファイル名の大文字小文字が一致しているか\n' +
+    '3. GLBファイルが壊れていないか';
+});
+
+function applyRootTransform(showMessage = true) {
+  modelRoot.object3D.position.set(currentX, currentY, currentZ);
+  modelRoot.object3D.scale.set(rootScale, rootScale, rootScale);
+
+  modelBounds.object3D.position.set(currentX, currentY, currentZ);
+  modelBounds.object3D.scale.set(rootScale, rootScale, rootScale);
+
+  if (showMessage) {
+    statusEl.textContent =
+      '表示調整中です。\n' +
+      'rootScale: ' + rootScale.toFixed(3) + '\n' +
+      'X: ' + currentX.toFixed(3) + '\n' +
+      'Y: ' + currentY.toFixed(3) + '\n' +
+      'Z: ' + currentZ.toFixed(3) + '\n' +
+      '角度: ' + angleModes[angleMode].name + '\n' +
+      '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
+      '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+      '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+      '建物: ' + layerHeightOffset.building.toFixed(3);
+  }
+}
+
+function adjustLayerHeight(layer, delta) {
+  layerHeightOffset[layer] += delta;
+  extractMeshesToProxy(true);
+}
+
+function adjustBuildingSplit(delta) {
+  buildingSplitRatio += delta;
+  buildingSplitRatio = Math.max(0.02, Math.min(0.80, buildingSplitRatio));
+  extractMeshesToProxy(true);
+}
+
+largerBtn.addEventListener('click', () => {
+  rootScale = Math.min(50, rootScale * 1.20);
+  applyRootTransform();
+});
+
+smallerBtn.addEventListener('click', () => {
+  rootScale = Math.max(0.001, rootScale / 1.20);
+  applyRootTransform();
+});
+
+frontBtn.addEventListener('click', () => {
+  currentZ += 0.08;
+  applyRootTransform();
+});
+
+backBtn.addEventListener('click', () => {
+  currentZ -= 0.08;
+  applyRootTransform();
+});
+
+upBtn.addEventListener('click', () => {
+  currentY += 0.08;
+  applyRootTransform();
+});
+
+downBtn.addEventListener('click', () => {
+  currentY -= 0.08;
+  applyRootTransform();
+});
+
+buildingUpBtn.addEventListener('click', () => {
+  adjustLayerHeight('building', 0.020);
+});
+
+buildingDownBtn.addEventListener('click', () => {
+  adjustLayerHeight('building', -0.020);
+});
+
+roadUpBtn.addEventListener('click', () => {
+  adjustLayerHeight('road', 0.015);
+});
+
+roadDownBtn.addEventListener('click', () => {
+  adjustLayerHeight('road', -0.015);
+});
+
+landUpBtn.addEventListener('click', () => {
+  adjustLayerHeight('land', 0.015);
+});
+
+landDownBtn.addEventListener('click', () => {
+  adjustLayerHeight('land', -0.015);
+});
+
+splitDownBtn.addEventListener('click', () => {
+  // しきい値を下げると建物として抽出される面が増える
+  adjustBuildingSplit(-0.03);
+});
+
+splitUpBtn.addEventListener('click', () => {
+  // しきい値を上げると建物として抽出される面が減る
+  adjustBuildingSplit(0.03);
+});
+
+heightResetBtn.addEventListener('click', () => {
+  layerHeightOffset = {
+    land: defaultLayerHeightOffset.land,
+    road: defaultLayerHeightOffset.road,
+    building: defaultLayerHeightOffset.building,
+    other: defaultLayerHeightOffset.other
+  };
+
+  buildingSplitRatio = 0.18;
+
+  extractMeshesToProxy(true);
+});
+
+rotateBtn.addEventListener('click', () => {
+  yawMode = (yawMode + 1) % 2;
+  updateProxyRotation();
+  applyRootTransform();
+
+  statusEl.textContent =
+    'モデルをZ軸で180度回転しました。\n' +
+    '現在: ' + (yawMode % 2 === 0 ? '0度' : '180度');
+});
+
+angleBtn.addEventListener('click', () => {
+  angleMode = (angleMode + 1) % angleModes.length;
+
+  const mode = angleModes[angleMode];
+
+  currentY = mode.y;
+  currentZ = mode.z;
+
+  updateProxyRotation();
+  applyRootTransform();
+
+  statusEl.textContent =
+    '角度を切り替えました。\n' +
+    '現在: ' + mode.name;
+});
+
+colorBtn.addEventListener('click', () => {
+  colorMode = (colorMode + 1) % colorSets.length;
+  extractMeshesToProxy(true);
+});
+
+resetBtn.addEventListener('click', () => {
+  rootScale = 1.0;
+  currentX = 0.0;
+  yawMode = 0;
+  angleMode = 0;
+  baseFlipXDeg = 0;
+  buildingSplitRatio = 0.18;
+
+  layerHeightOffset = {
+    land: defaultLayerHeightOffset.land,
+    road: defaultLayerHeightOffset.road,
+    building: defaultLayerHeightOffset.building,
+    other: defaultLayerHeightOffset.other
+  };
+
+  const mode = angleModes[angleMode];
+  currentY = mode.y;
+  currentZ = mode.z;
+
+  extractMeshesToProxy(false);
+
+  statusEl.textContent =
+    '表示リセットしました。\n' +
+    '初期段階に近い、名刺面と地面が平行な向きに戻しました。\n' +
+    '建物は陰影が出る材質にしています。';
+});
+
+markerEl.addEventListener('targetFound', () => {
+  targetGuide.style.display = 'none';
+  foundBanner.style.display = 'block';
+
+  modelRoot.setAttribute('visible', 'true');
+  modelBounds.setAttribute('visible', 'false');
+  debugBox.setAttribute('visible', 'false');
+
+  if (!proxyGroup && modelLoaded) {
+    extractMeshesToProxy(false);
+  }
+
+  statusEl.textContent =
+    '潮見ジオラマを発見しました。\n' +
+    '初期段階に近い、名刺面と地面が平行な向きで表示しています。\n' +
+    '建物の面にはライトによるうっすらした陰影が出ます。';
+
+  setTimeout(() => {
+    foundBanner.style.display = 'none';
+  }, 2000);
+});
+
+markerEl.addEventListener('targetLost', () => {
+  if (!arStarted) return;
+
+  foundBanner.style.display = 'none';
+  targetGuide.style.display = 'block';
+
+  statusEl.textContent =
+    'マーカーを見失いました。\n' +
+    '中央に入れてください。';
+});
+
+async function waitForMindARSystem() {
+  for (let i = 0; i < 50; i++) {
+    const sys = sceneEl.systems['mindar-image-system'];
+    if (sys) return sys;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return null;
+}
+
+startBtn.addEventListener('click', async () => {
+  try {
+    if (!window.isSecureContext) {
+      statusEl.textContent =
+        'HTTPSではありません。\n' +
+        'https:// のURLで開いてください。';
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      statusEl.textContent =
+        'このブラウザではカメラAPIが使えません。\n' +
+        'iPhoneはSafari、AndroidはChromeで開いてください。';
+      return;
+    }
+
+    if (!sceneLoaded) {
+      statusEl.textContent =
+        'ARシーンの読み込みがまだ完了していません。\n' +
+        '少し待ってから開始してください。';
+      return;
+    }
+
+    const mindar = await waitForMindARSystem();
+
+    if (!mindar) {
+      statusEl.textContent =
+        'MindARシステムが見つかりません。\n' +
+        'scriptタグを確認してください。';
+      return;
+    }
+
+    targetGuide.style.display = 'block';
+    statusEl.textContent =
+      'カメラを起動しています。\n' +
+      'カメラ許可をしてください。';
+
+    await mindar.start();
+
+    arStarted = true;
+
+    statusEl.textContent =
+      '探索中です。\n' +
+      'マーカーを画面中央に入れてください。';
+
+  } catch (err) {
+    console.error(err);
+
+    statusEl.textContent =
+      'カメラ開始に失敗しました。\n' +
+      (err.message || String(err));
+  }
+});
+
+stopBtn.addEventListener('click', () => {
+  const sys = sceneEl.systems['mindar-image-system'];
+
+  if (sys) {
+    sys.stop();
+  }
+
+  arStarted = false;
+  targetGuide.style.display = 'none';
+  foundBanner.style.display = 'none';
+
+  statusEl.textContent = '停止しました。';
+});
+
+checkBtn.addEventListener('click', () => {
+  const mindar = sceneEl.systems['mindar-image-system'];
+  const counts = countSourceMeshes();
+
+  let proxyChildren = 0;
+
+  if (proxyGroup) {
+    proxyChildren = proxyGroup.children.length;
+  }
+
+  statusEl.textContent =
+    '状態確認\n' +
+    'HTTPS: ' + window.isSecureContext + '\n' +
+    'sceneLoaded: ' + sceneLoaded + '\n' +
+    'MindAR: ' + Boolean(mindar) + '\n' +
+    'modelLoaded: ' + modelLoaded + '\n' +
+    'source childCount: ' + counts.childCount + '\n' +
+    'source meshCount: ' + counts.meshCount + '\n' +
+    'source visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
+    'proxyGroup: ' + Boolean(proxyGroup) + '\n' +
+    'proxy children: ' + proxyChildren + '\n' +
+    'rootScale: ' + rootScale.toFixed(3) + '\n' +
+    'innerScale: ' + innerScale.toFixed(4) + '\n' +
+    'X: ' + currentX.toFixed(3) + '\n' +
+    'Y: ' + currentY.toFixed(3) + '\n' +
+    'Z: ' + currentZ.toFixed(3) + '\n' +
+    '角度: ' + angleModes[angleMode].name + '\n' +
+    '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
+    '土地高さ: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+    '道路高さ: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+    '建物高さ: ' + layerHeightOffset.building.toFixed(3) + '\n' +
+    'X軸反転: ' + baseFlipXDeg + '度\n' +
+    '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
+    'box size: ' + boxSizeText + '\n' +
+    'box center: ' + boxCenterText;
+});
+</script>
+
+</body>
+</html>
