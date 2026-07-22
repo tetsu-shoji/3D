@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ AR MindAR＋固定AR安定版</title>
+<title>潮見ジオラマ MindARモード</title>
 
 <script>
 window.__startupErrorText = "";
@@ -39,25 +39,11 @@ window.addEventListener("unhandledrejection", function (e) {
   window.__startupErrorText = msg;
   setStatusSafe(msg);
 });
-
-window.addEventListener("DOMContentLoaded", function () {
-  const el = document.querySelector("#status");
-  if (el) {
-    if (window.__startupErrorText) {
-      el.textContent = window.__startupErrorText;
-    } else {
-      el.textContent =
-        "HTMLは読み込まれました。\n" +
-        "A-Frame / MindAR / model-viewer の初期化を待っています。";
-    }
-  }
-});
 </script>
 
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
-<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 
 <style>
 html, body {
@@ -123,8 +109,8 @@ button {
   padding: 9px 12px;
   font-size: 13px;
   font-weight: 700;
-  color: #111;
   background: rgba(255,255,255,0.94);
+  color: #111;
   box-shadow: 0 3px 12px rgba(0,0,0,0.3);
 }
 
@@ -134,8 +120,7 @@ button:active {
 
 #startBtn { background: #c40000; color: #fff; }
 #stopBtn { background: #333; color: #fff; }
-#fixedModeBtn { background: #1565c0; color: #fff; }
-#fixedCloseBtn { background: #424242; color: #fff; }
+#fixedBtn { background: #1565c0; color: #fff; }
 #resetBtn { background: #005bd3; color: #fff; }
 #checkBtn { background: #00a36c; color: #fff; }
 #rotateBtn { background: #673ab7; color: #fff; }
@@ -199,75 +184,10 @@ button:active {
   display: none;
   pointer-events: none;
 }
-
-#fixedViewerOverlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: #111;
-  display: none;
-  flex-direction: column;
-}
-
-#fixedHeader {
-  color: #fff;
-  background: #17324d;
-  padding: 10px 12px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-#fixedViewerArea {
-  position: relative;
-  flex: 1;
-  background: #f2f2f2;
-}
-
-#fixedViewer {
-  width: 100%;
-  height: 100%;
-  background: #f2f2f2;
-}
-
-#fixedButtons {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 18px;
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  pointer-events: auto;
-}
-
-#arLaunchBtn {
-  background: #c40000;
-  color: #fff;
-  border-radius: 999px;
-  padding: 12px 18px;
-  font-size: 15px;
-  font-weight: 800;
-}
-
-#fixedCloseBtn {
-  border-radius: 999px;
-  padding: 12px 18px;
-  font-size: 15px;
-  font-weight: 800;
-}
-
-#fixedNote {
-  color: #fff;
-  background: #222;
-  padding: 9px 12px;
-  font-size: 12px;
-  line-height: 1.5;
-}
 </style>
 </head>
 
 <body>
-
 <div id="ui">
   <div id="topPanel">
     <button id="startBtn">開始</button>
@@ -283,7 +203,7 @@ button:active {
     <button id="rotateBtn">180度回転</button>
     <button id="angleBtn">角度切替</button>
 
-    <button id="fixedModeBtn">床・机に固定AR</button>
+    <button id="fixedBtn">床・机に固定AR</button>
 
     <button id="resetBtn">表示リセット</button>
     <button id="checkBtn">確認</button>
@@ -292,32 +212,6 @@ button:active {
   <div id="foundBanner">潮見ジオラマを発見！</div>
   <div id="targetGuide"></div>
   <div id="status">初期化中です。</div>
-</div>
-
-<div id="fixedViewerOverlay">
-  <div id="fixedHeader">
-    固定ARモード<br>
-    デフォルトの shiomi_city.glb を使って、床・机などにAR配置します。
-  </div>
-
-  <div id="fixedViewerArea">
-    ./shiomi_city.glb
-
-      <button id="arLaunchBtn" slot="ar-button">
-        ARで床・机に配置
-      </button>
-
-    </model-viewer>
-
-    <div id="fixedButtons">
-      <button id="fixedCloseBtn">固定解除してMindARに戻る</button>
-    </div>
-  </div>
-
-  <div id="fixedNote">
-    Android Chrome + ARCore対応端末では床・机などの水平面に配置できる場合があります。
-    iPhoneではQuick Lookに切り替わる場合があり、USDZがないと動作が制限されることがあります。
-  </div>
 </div>
 
 <a-scene
@@ -333,7 +227,7 @@ button:active {
 
   <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
 
-    <a-light type="ambient" intensity="1.4"></a-light>
+    <a-light type="ambient" intensity="1.5"></a-light>
     <a-light type="directional" intensity="2.2" position="0.9 1.4 2.0"></a-light>
     <a-light type="directional" intensity="0.8" position="-1.2 -0.4 1.2"></a-light>
 
@@ -385,22 +279,15 @@ const debugBox = document.querySelector("#debugBox");
 
 const startBtn = document.querySelector("#startBtn");
 const stopBtn = document.querySelector("#stopBtn");
-
 const largerBtn = document.querySelector("#largerBtn");
 const smallerBtn = document.querySelector("#smallerBtn");
 const frontBtn = document.querySelector("#frontBtn");
 const backBtn = document.querySelector("#backBtn");
 const upBtn = document.querySelector("#upBtn");
 const downBtn = document.querySelector("#downBtn");
-
 const rotateBtn = document.querySelector("#rotateBtn");
 const angleBtn = document.querySelector("#angleBtn");
-
-const fixedModeBtn = document.querySelector("#fixedModeBtn");
-const fixedViewerOverlay = document.querySelector("#fixedViewerOverlay");
-const fixedViewer = document.querySelector("#fixedViewer");
-const fixedCloseBtn = document.querySelector("#fixedCloseBtn");
-
+const fixedBtn = document.querySelector("#fixedBtn");
 const resetBtn = document.querySelector("#resetBtn");
 const checkBtn = document.querySelector("#checkBtn");
 
@@ -411,7 +298,6 @@ const foundBanner = document.querySelector("#foundBanner");
 let sceneLoaded = false;
 let modelLoaded = false;
 let arStarted = false;
-let wasMindARActiveBeforeFixed = false;
 
 let currentScale = 1.0;
 let autoFitScale = 1.0;
@@ -447,7 +333,7 @@ const angleModes = [
 window.addEventListener("DOMContentLoaded", () => {
   statusEl.textContent =
     "HTMLは読み込まれました。\n" +
-    "A-Frame / MindAR / model-viewer の初期化を待っています。";
+    "A-Frame / MindAR の初期化を待っています。";
 
   setTimeout(() => {
     if (!sceneLoaded && !window.__startupErrorText) {
@@ -458,25 +344,15 @@ window.addEventListener("DOMContentLoaded", () => {
   }, 4000);
 });
 
-window.addEventListener("load", () => {
-  if (!sceneLoaded && !window.__startupErrorText) {
-    statusEl.textContent =
-      "ページ全体は読み込まれましたが、A-Frameシーンの初期化待ちです。\n" +
-      "少し待ってから開始ボタンを押してください。";
-  }
-});
-
 sceneEl.addEventListener("loaded", () => {
   sceneLoaded = true;
   statusEl.textContent =
     "A-Frameシーンを読み込みました。\n" +
-    "MindARモードでは＋／－等で操作できます。\n" +
-    "床・机に固定したい場合は「床・机に固定AR」を押してください。";
+    "開始ボタンを押してください。";
 });
 
 shiomiMindAR.addEventListener("model-loaded", () => {
   modelLoaded = true;
-
   fitMindARModel();
 
   statusEl.textContent =
@@ -493,53 +369,8 @@ shiomiMindAR.addEventListener("model-error", (e) => {
     "index.html と同じフォルダに shiomi_city.glb があるか確認してください。";
 });
 
-if (fixedViewer) {
-  fixedViewer.addEventListener("load", () => {
-    console.log("model-viewer loaded");
-  });
-
-  fixedViewer.addEventListener("error", () => {
-    statusEl.textContent =
-      "固定AR用の model-viewer でGLBを読み込めませんでした。\n" +
-      "shiomi_city.glb が index.html と同じフォルダにあるか確認してください。";
-  });
-
-  fixedViewer.addEventListener("ar-status", (event) => {
-    const status = event.detail.status;
-
-    if (status === "session-started") {
-      statusEl.textContent =
-        "固定ARを開始しました。\n" +
-        "床・机などの水平面を認識して、モデルを配置してください。";
-    }
-
-    if (status === "object-placed") {
-      statusEl.textContent =
-        "AR空間にモデルを配置しました。\n" +
-        "この固定は model-viewer 側のAR機能による配置です。";
-    }
-
-    if (status === "not-presenting") {
-      statusEl.textContent =
-        "固定ARを終了しました。\n" +
-        "MindARモードに戻るには「固定解除してMindARに戻る」を押してください。";
-    }
-
-    if (status === "failed") {
-      statusEl.textContent =
-        "固定ARの起動に失敗しました。\n" +
-        "Android Chrome、ARCore対応端末、HTTPS、カメラ許可を確認してください。";
-    }
-  });
-} else {
-  statusEl.textContent =
-    "fixedViewer が見つかりません。\n" +
-    "<model-viewer id=\"fixedViewer\"> のタグを確認してください。";
-}
-
 function fitMindARModel() {
   const THREE = AFRAME.THREE;
-
   const obj = shiomiMindAR.object3D;
 
   obj.updateMatrixWorld(true);
@@ -573,6 +404,7 @@ function fitMindARModel() {
   autoFitScale = Math.max(0.0001, Math.min(1000, autoFitScale));
 
   shiomiMindAR.object3D.position.set(-center.x, -center.y, -center.z);
+
   currentScale = autoFitScale;
 
   applyMindARTransform(false);
@@ -592,7 +424,7 @@ function applyMindARTransform(showMessage = true) {
   if (showMessage) {
     statusEl.textContent =
       "MindAR表示を調整しました。\n" +
-      "scale: " + currentScale.toFixed(5) + "\n" +
+      "scale: " + currentScale.toFixed(6) + "\n" +
       "X: " + currentX.toFixed(3) + "\n" +
       "Y: " + currentY.toFixed(3) + "\n" +
       "Z: " + currentZ.toFixed(3) + "\n" +
@@ -676,53 +508,8 @@ resetBtn.addEventListener("click", () => {
     "自動スケール値に戻しました。";
 });
 
-fixedModeBtn.addEventListener("click", async () => {
-  wasMindARActiveBeforeFixed = arStarted;
-
-  const sys = sceneEl.systems["mindar-image-system"];
-
-  if (sys && arStarted) {
-    sys.stop();
-    arStarted = false;
-  }
-
-  targetGuide.style.display = "none";
-  foundBanner.style.display = "none";
-  fixedViewerOverlay.style.display = "flex";
-
-  statusEl.textContent =
-    "固定ARモードを表示しました。\n" +
-    "画面下の「ARで床・机に配置」を押してください。\n" +
-    "このモードではデフォルトの shiomi_city.glb を使用します。";
-});
-
-fixedCloseBtn.addEventListener("click", async () => {
-  fixedViewerOverlay.style.display = "none";
-
-  if (wasMindARActiveBeforeFixed) {
-    const sys = await waitForMindARSystem();
-
-    if (sys) {
-      try {
-        targetGuide.style.display = "block";
-        statusEl.textContent =
-          "MindARモードへ戻しています。\n" +
-          "名刺マーカーを画面中央に入れてください。";
-
-        await sys.start();
-        arStarted = true;
-      } catch (e) {
-        statusEl.textContent =
-          "MindARの再開に失敗しました。\n" +
-          "開始ボタンを押して再開してください。\n" +
-          String(e);
-      }
-    }
-  } else {
-    statusEl.textContent =
-      "固定ARモードを閉じました。\n" +
-      "MindARを使う場合は開始ボタンを押してください。";
-  }
+fixedBtn.addEventListener("click", () => {
+  location.href = "./fixed.html";
 });
 
 markerEl.addEventListener("targetFound", () => {
@@ -749,7 +536,7 @@ markerEl.addEventListener("targetLost", () => {
 
   statusEl.textContent =
     "マーカーを見失いました。\n" +
-    "MindARモードでは、もう一度マーカーを画面中央に入れてください。";
+    "もう一度マーカーを画面中央に入れてください。";
 });
 
 async function waitForMindARSystem() {
@@ -765,109 +552,4 @@ async function waitForMindARSystem() {
 startBtn.addEventListener("click", async () => {
   try {
     if (!window.isSecureContext) {
-      statusEl.textContent =
-        "HTTPSではありません。\n" +
-        "https:// のURLで開いてください。";
-      return;
-    }
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      statusEl.textContent =
-        "このブラウザではカメラAPIが使えません。\n" +
-        "iPhoneはSafari、AndroidはChromeで開いてください。";
-      return;
-    }
-
-    if (!sceneLoaded) {
-      statusEl.textContent =
-        "A-Frameシーンの読み込みがまだ完了していません。\n" +
-        "少し待つか、画面に表示されているエラーを確認してください。";
-      return;
-    }
-
-    const mindar = await waitForMindARSystem();
-
-    if (!mindar) {
-      statusEl.textContent =
-        "MindARシステムが見つかりません。\n" +
-        "A-Frame / MindAR のscriptタグを確認してください。";
-      return;
-    }
-
-    targetGuide.style.display = "block";
-
-    statusEl.textContent =
-      "カメラを起動しています。\n" +
-      "カメラ許可をしてください。";
-
-    await mindar.start();
-
-    arStarted = true;
-
-    statusEl.textContent =
-      "探索中です。\n" +
-      "マーカーを画面中央に入れてください。";
-
-  } catch (err) {
-    console.error(err);
-
-    statusEl.textContent =
-      "カメラ開始に失敗しました。\n" +
-      (err.message || String(err));
-  }
-});
-
-stopBtn.addEventListener("click", () => {
-  const sys = sceneEl.systems["mindar-image-system"];
-
-  if (sys) {
-    sys.stop();
-  }
-
-  arStarted = false;
-  targetGuide.style.display = "none";
-  foundBanner.style.display = "none";
-
-  statusEl.textContent = "停止しました。";
-});
-
-checkBtn.addEventListener("click", async () => {
-  const mindar = sceneEl.systems["mindar-image-system"];
-
-  let fileStatus = "";
-
-  try {
-    const markerRes = await fetch("./marker.mind", { cache: "no-store" });
-    const glbRes = await fetch("./shiomi_city.glb", { cache: "no-store" });
-
-    fileStatus =
-      "marker.mind: HTTP " + markerRes.status + "\n" +
-      "shiomi_city.glb: HTTP " + glbRes.status + "\n";
-  } catch (e) {
-    fileStatus =
-      "ファイル確認でfetch失敗。\n" +
-      String(e) + "\n";
-  }
-
-  statusEl.textContent =
-    "状態確認\n" +
-    "HTTPS: " + window.isSecureContext + "\n" +
-    "sceneLoaded: " + sceneLoaded + "\n" +
-    "MindAR: " + Boolean(mindar) + "\n" +
-    "modelLoaded: " + modelLoaded + "\n" +
-    "fixedViewer: " + Boolean(fixedViewer) + "\n" +
-    "arStarted: " + arStarted + "\n" +
-    "currentScale: " + currentScale.toFixed(6) + "\n" +
-    "autoFitScale: " + autoFitScale.toFixed(6) + "\n" +
-    "X: " + currentX.toFixed(3) + "\n" +
-    "Y: " + currentY.toFixed(3) + "\n" +
-    "Z: " + currentZ.toFixed(3) + "\n" +
-    "角度: " + angleModes[angleMode].name + "\n" +
-    "回転: " + (yawMode % 2 === 0 ? "0度" : "180度") + "\n\n" +
-    "ファイル確認:\n" +
-    fileStatus;
-});
-</script>
-
-</body>
-</html>
+    
