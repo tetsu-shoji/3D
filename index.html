@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>潮見ジオラマ MindARモード</title>
+<title>潮見ジオラマ AR 固定表示・タップ配置対応版</title>
 
 <script>
-window.__startupErrorText = "";
+window.__startupErrorText = '';
 
 function setStatusSafe(text) {
-  const el = document.querySelector("#status");
+  const el = document.querySelector('#status');
   if (el) {
     el.textContent = text;
   } else {
@@ -17,27 +17,38 @@ function setStatusSafe(text) {
   }
 }
 
-window.addEventListener("error", function (e) {
+window.addEventListener('error', function (e) {
   const msg =
-    "JavaScriptエラーが発生しました。\n" +
-    "message: " + e.message + "\n" +
-    "file: " + e.filename + "\n" +
-    "line: " + e.lineno + "\n" +
-    "column: " + e.colno;
+    'JavaScriptエラーが発生しました。\n' +
+    'message: ' + e.message + '\n' +
+    'file: ' + e.filename + '\n' +
+    'line: ' + e.lineno + '\n' +
+    'column: ' + e.colno;
 
   console.error(msg);
-  window.__startupErrorText = msg;
   setStatusSafe(msg);
 });
 
-window.addEventListener("unhandledrejection", function (e) {
+window.addEventListener('unhandledrejection', function (e) {
   const msg =
-    "Promiseエラーが発生しました。\n" +
+    'Promiseエラーが発生しました。\n' +
     String(e.reason);
 
   console.error(msg);
-  window.__startupErrorText = msg;
   setStatusSafe(msg);
+});
+
+window.addEventListener('DOMContentLoaded', function () {
+  const el = document.querySelector('#status');
+  if (el) {
+    if (window.__startupErrorText) {
+      el.textContent = window.__startupErrorText;
+    } else {
+      el.textContent =
+        'HTMLは読み込まれました。\n' +
+        'A-Frame / MindAR の初期化を待っています。';
+    }
+  }
 });
 </script>
 
@@ -109,8 +120,8 @@ button {
   padding: 9px 12px;
   font-size: 13px;
   font-weight: 700;
-  background: rgba(255,255,255,0.94);
   color: #111;
+  background: rgba(255,255,255,0.94);
   box-shadow: 0 3px 12px rgba(0,0,0,0.3);
 }
 
@@ -120,11 +131,20 @@ button:active {
 
 #startBtn { background: #c40000; color: #fff; }
 #stopBtn { background: #333; color: #fff; }
-#fixedBtn { background: #1565c0; color: #fff; }
 #resetBtn { background: #005bd3; color: #fff; }
-#checkBtn { background: #00a36c; color: #fff; }
+#colorBtn { background: #ff9800; color: #fff; }
 #rotateBtn { background: #673ab7; color: #fff; }
 #angleBtn { background: #009688; color: #fff; }
+#heightResetBtn { background: #607d8b; color: #fff; }
+#pinBtn { background: #1565c0; color: #fff; }
+#tapPinBtn { background: #00838f; color: #fff; }
+#clearPinBtn { background: #424242; color: #fff; }
+#checkBtn { background: #00a36c; color: #fff; }
+
+#buildingUpBtn, #buildingDownBtn { background: #eeeeee; color: #111; }
+#roadUpBtn, #roadDownBtn { background: #ffd54f; color: #111; }
+#landUpBtn, #landDownBtn { background: #81c784; color: #111; }
+#splitUpBtn, #splitDownBtn { background: #ce93d8; color: #111; }
 
 #status {
   position: fixed;
@@ -158,7 +178,7 @@ button:active {
 }
 
 #targetGuide::after {
-  content: "名刺マーカーをこの枠に入れてください";
+  content: "マーカーをこの枠に合わせてください";
   position: absolute;
   left: 0;
   right: 0;
@@ -200,10 +220,24 @@ button:active {
     <button id="upBtn">全体上へ</button>
     <button id="downBtn">全体下へ</button>
 
+    <button id="buildingUpBtn">建物↑</button>
+    <button id="buildingDownBtn">建物↓</button>
+    <button id="roadUpBtn">道路↑</button>
+    <button id="roadDownBtn">道路↓</button>
+    <button id="landUpBtn">土地↑</button>
+    <button id="landDownBtn">土地↓</button>
+
+    <button id="splitDownBtn">建物判定－</button>
+    <button id="splitUpBtn">建物判定＋</button>
+    <button id="heightResetBtn">高さリセット</button>
+
     <button id="rotateBtn">180度回転</button>
     <button id="angleBtn">角度切替</button>
+    <button id="colorBtn">色切替</button>
 
-    <button id="fixedBtn">床・机に固定AR</button>
+    <button id="pinBtn">この位置に固定</button>
+    <button id="tapPinBtn">タップ位置に固定</button>
+    <button id="clearPinBtn">固定解除</button>
 
     <button id="resetBtn">表示リセット</button>
     <button id="checkBtn">確認</button>
@@ -227,36 +261,47 @@ button:active {
 
   <a-entity id="markerTarget" mindar-image-target="targetIndex: 0">
 
-    <a-light type="ambient" intensity="1.5"></a-light>
-    <a-light type="directional" intensity="2.2" position="0.9 1.4 2.0"></a-light>
-    <a-light type="directional" intensity="0.8" position="-1.2 -0.4 1.2"></a-light>
+    <a-light type="ambient" intensity="1.10"></a-light>
+    <a-light type="directional" intensity="2.3" position="0.9 1.4 2.0"></a-light>
+    <a-light type="directional" intensity="0.9" position="-1.2 -0.4 1.2"></a-light>
+    <a-light type="point" intensity="1.0" position="0 0 1"></a-light>
 
     <a-box
       id="debugBox"
       visible="false"
       position="0 0 0.08"
-      width="0.06"
-      height="0.06"
-      depth="0.06"
+      width="0.07"
+      height="0.07"
+      depth="0.07"
       color="#ff0000">
     </a-box>
 
-    <a-entity
-      id="modelHolder"
+    <a-box
+      id="modelBounds"
+      visible="false"
       position="0 0 0.28"
-      rotation="180 0 0"
+      width="0.8"
+      height="0.8"
+      depth="0.8"
+      material="color: #00ffff; wireframe: true; transparent: true; opacity: 0.6;">
+    </a-box>
+
+    <a-entity
+      id="modelRoot"
+      position="0 0 0.28"
+      rotation="0 0 0"
       scale="1 1 1"
       visible="true">
+    </a-entity>
 
-      <a-entity
-        id="shiomiMindAR"
-        gltf-model="url(./shiomi_city.glb)"
-        position="0 0 0"
-        rotation="0 0 0"
-        scale="1 1 1"
-        visible="true">
-      </a-entity>
-
+    <a-entity
+      id="shiomiOriginal"
+      gltf-model="url(./shiomi_city.glb)"
+      position="0 0 0"
+      rotation="0 0 0"
+      scale="1 1 1"
+      visible="false"
+      animation-mixer>
     </a-entity>
 
     <a-text
@@ -268,288 +313,1179 @@ button:active {
     </a-text>
 
   </a-entity>
+
+  <!-- 名刺ターゲットの外側。固定表示用 -->
+  <a-entity id="pinnedRoot" visible="false"></a-entity>
+
 </a-scene>
 
 <script>
-const sceneEl = document.querySelector("#arScene");
-const markerEl = document.querySelector("#markerTarget");
-const modelHolder = document.querySelector("#modelHolder");
-const shiomiMindAR = document.querySelector("#shiomiMindAR");
-const debugBox = document.querySelector("#debugBox");
+const sceneEl = document.querySelector('#arScene');
+const markerEl = document.querySelector('#markerTarget');
+const originalEl = document.querySelector('#shiomiOriginal');
+const modelRoot = document.querySelector('#modelRoot');
+const modelBounds = document.querySelector('#modelBounds');
+const debugBox = document.querySelector('#debugBox');
+const pinnedRoot = document.querySelector('#pinnedRoot');
 
-const startBtn = document.querySelector("#startBtn");
-const stopBtn = document.querySelector("#stopBtn");
-const largerBtn = document.querySelector("#largerBtn");
-const smallerBtn = document.querySelector("#smallerBtn");
-const frontBtn = document.querySelector("#frontBtn");
-const backBtn = document.querySelector("#backBtn");
-const upBtn = document.querySelector("#upBtn");
-const downBtn = document.querySelector("#downBtn");
-const rotateBtn = document.querySelector("#rotateBtn");
-const angleBtn = document.querySelector("#angleBtn");
-const fixedBtn = document.querySelector("#fixedBtn");
-const resetBtn = document.querySelector("#resetBtn");
-const checkBtn = document.querySelector("#checkBtn");
+const startBtn = document.querySelector('#startBtn');
+const stopBtn = document.querySelector('#stopBtn');
 
-const statusEl = document.querySelector("#status");
-const targetGuide = document.querySelector("#targetGuide");
-const foundBanner = document.querySelector("#foundBanner");
+const largerBtn = document.querySelector('#largerBtn');
+const smallerBtn = document.querySelector('#smallerBtn');
+const frontBtn = document.querySelector('#frontBtn');
+const backBtn = document.querySelector('#backBtn');
+const upBtn = document.querySelector('#upBtn');
+const downBtn = document.querySelector('#downBtn');
+
+const buildingUpBtn = document.querySelector('#buildingUpBtn');
+const buildingDownBtn = document.querySelector('#buildingDownBtn');
+const roadUpBtn = document.querySelector('#roadUpBtn');
+const roadDownBtn = document.querySelector('#roadDownBtn');
+const landUpBtn = document.querySelector('#landUpBtn');
+const landDownBtn = document.querySelector('#landDownBtn');
+
+const splitUpBtn = document.querySelector('#splitUpBtn');
+const splitDownBtn = document.querySelector('#splitDownBtn');
+const heightResetBtn = document.querySelector('#heightResetBtn');
+
+const rotateBtn = document.querySelector('#rotateBtn');
+const angleBtn = document.querySelector('#angleBtn');
+const colorBtn = document.querySelector('#colorBtn');
+const pinBtn = document.querySelector('#pinBtn');
+const tapPinBtn = document.querySelector('#tapPinBtn');
+const clearPinBtn = document.querySelector('#clearPinBtn');
+const resetBtn = document.querySelector('#resetBtn');
+const checkBtn = document.querySelector('#checkBtn');
+
+const statusEl = document.querySelector('#status');
+const targetGuide = document.querySelector('#targetGuide');
+const foundBanner = document.querySelector('#foundBanner');
 
 let sceneLoaded = false;
 let modelLoaded = false;
 let arStarted = false;
 
-let currentScale = 1.0;
-let autoFitScale = 1.0;
-
+let rootScale = 1.0;
 let currentX = 0.0;
-let currentY = 0.0;
+let currentY = 0.00;
 let currentZ = 0.28;
 
+let proxyGroup = null;
+let proxyMeshCount = 0;
+let sourceMeshCount = 0;
+let visibleSourceMeshCount = 0;
+let childCount = 0;
+let innerScale = 1.0;
+let boxSizeText = '';
+let boxCenterText = '';
+
+let colorMode = 0;
 let yawMode = 0;
 let angleMode = 0;
 
+let baseFlipXDeg = 180;
+let buildingSplitRatio = 0.18;
+
+let isPinned = false;
+let pinnedGroup = null;
+let waitingForTapPlacement = false;
+
+/*
+  建物は -0.060 が土地と合うため初期値に設定
+*/
+let layerHeightOffset = {
+  land: -0.006,
+  road: 0.055,
+  building: -0.060,
+  other: 0.030
+};
+
+const defaultLayerHeightOffset = {
+  land: -0.006,
+  road: 0.055,
+  building: -0.060,
+  other: 0.030
+};
+
+const colorSets = [
+  {
+    land: 0x4caf50,
+    building: 0xd8d8d8,
+    road: 0xf9c74f,
+    other: 0x90caf9
+  },
+  {
+    land: 0x66bb6a,
+    building: 0xf0f0f0,
+    road: 0xffca28,
+    other: 0x64b5f6
+  },
+  {
+    land: 0x6abf69,
+    building: 0xcfcfcf,
+    road: 0x8d6e63,
+    other: 0x90caf9
+  }
+];
+
 const angleModes = [
   {
-    name: "平行表示",
-    rotX: 180,
+    name: '平行表示',
+    pitchDeg: 0,
     z: 0.28,
     y: 0.00
   },
   {
-    name: "やや斜め",
-    rotX: 162,
+    name: 'やや斜め',
+    pitchDeg: -18,
     z: 0.36,
     y: 0.04
   },
   {
-    name: "ローアングル",
-    rotX: 148,
+    name: 'ローアングル',
+    pitchDeg: -32,
     z: 0.48,
     y: 0.08
   }
 ];
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener('DOMContentLoaded', () => {
   statusEl.textContent =
-    "HTMLは読み込まれました。\n" +
-    "A-Frame / MindAR の初期化を待っています。";
+    'HTMLは読み込まれました。\n' +
+    'A-Frame / MindAR の初期化を待っています。';
 
   setTimeout(() => {
-    if (!sceneLoaded && !window.__startupErrorText) {
+    if (!sceneLoaded) {
       statusEl.textContent =
-        "A-Frameシーンのloadedイベントを待っています。\n" +
-        "この表示が続く場合は、CDN読み込み、scriptタグ、HTML構文を確認してください。";
+        'A-Frameシーンのloadedイベントを待っています。\n' +
+        'この表示が続く場合は、CDN読み込み、scriptタグ、またはHTML構文を確認してください。';
     }
   }, 4000);
 });
 
-sceneEl.addEventListener("loaded", () => {
+window.addEventListener('load', () => {
+  if (!sceneLoaded) {
+    statusEl.textContent =
+      'ページ全体は読み込まれましたが、A-Frameシーンの初期化待ちです。\n' +
+      '少し待ってから開始ボタンを押してください。';
+  }
+});
+
+sceneEl.addEventListener('loaded', () => {
   sceneLoaded = true;
   statusEl.textContent =
-    "A-Frameシーンを読み込みました。\n" +
-    "開始ボタンを押してください。";
+    'A-Frameシーンを読み込みました。\n' +
+    '開始ボタンを押してください。';
 });
 
-shiomiMindAR.addEventListener("model-loaded", () => {
-  modelLoaded = true;
-  fitMindARModel();
+function countSourceMeshes() {
+  const obj = originalEl.object3D;
+  let c = 0;
+  let m = 0;
+  let v = 0;
 
-  statusEl.textContent =
-    "shiomi_city.glb を読み込みました。\n" +
-    "自動で中央寄せ・スケール調整しました。\n" +
-    "開始ボタンを押して名刺マーカーにかざしてください。";
-});
+  obj.traverse((node) => {
+    c++;
+    if (node.isMesh) {
+      m++;
+      if (node.visible) v++;
+    }
+  });
 
-shiomiMindAR.addEventListener("model-error", (e) => {
-  console.error("model-error", e);
-  modelLoaded = false;
-  statusEl.textContent =
-    "shiomi_city.glb の読み込みに失敗しました。\n" +
-    "index.html と同じフォルダに shiomi_city.glb があるか確認してください。";
-});
+  childCount = c;
+  sourceMeshCount = m;
+  visibleSourceMeshCount = v;
 
-function fitMindARModel() {
+  return {
+    childCount: c,
+    meshCount: m,
+    visibleMeshCount: v
+  };
+}
+
+function clearProxyGroup() {
+  if (proxyGroup) {
+    modelRoot.object3D.remove(proxyGroup);
+
+    proxyGroup.traverse((node) => {
+      if (node.geometry) node.geometry.dispose();
+
+      if (node.material) {
+        if (Array.isArray(node.material)) {
+          node.material.forEach(mat => mat.dispose());
+        } else {
+          node.material.dispose();
+        }
+      }
+    });
+
+    proxyGroup = null;
+    proxyMeshCount = 0;
+  }
+}
+
+function getGeometryVolume(geom) {
+  geom.computeBoundingBox();
+  if (!geom.boundingBox) return 0;
+
+  const size = new AFRAME.THREE.Vector3();
+  geom.boundingBox.getSize(size);
+
+  return Math.abs(size.x * size.y * size.z);
+}
+
+function remapYUpToARZUp(geom) {
+  const position = geom.attributes.position;
+  if (!position) return;
+
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const y = position.getY(i);
+    const z = position.getZ(i);
+
+    position.setXYZ(i, x, y, z);
+  }
+
+  position.needsUpdate = true;
+  geom.computeVertexNormals();
+  geom.computeBoundingBox();
+}
+
+function splitGeometryByHeight(sourceGeom, thresholdRatio) {
   const THREE = AFRAME.THREE;
-  const obj = shiomiMindAR.object3D;
 
-  obj.updateMatrixWorld(true);
+  const geom = sourceGeom.clone();
+  geom.computeBoundingBox();
 
-  const box = new THREE.Box3().setFromObject(obj);
+  if (!geom.boundingBox) {
+    return { low: geom, high: null };
+  }
 
-  if (!box || box.isEmpty()) {
-    statusEl.textContent =
-      "GLBのサイズ取得に失敗しました。\n" +
-      "確認ボタンを押してください。";
+  const box = geom.boundingBox;
+  const minZ = box.min.z;
+  const maxZ = box.max.z;
+  const thresholdZ = minZ + (maxZ - minZ) * thresholdRatio;
+
+  const pos = geom.attributes.position;
+  const indexAttr = geom.index;
+
+  const lowPositions = [];
+  const highPositions = [];
+
+  function pushTriangle(target, ax, ay, az, bx, by, bz, cx, cy, cz) {
+    target.push(ax, ay, az, bx, by, bz, cx, cy, cz);
+  }
+
+  if (indexAttr) {
+    for (let i = 0; i < indexAttr.count; i += 3) {
+      const ia = indexAttr.getX(i);
+      const ib = indexAttr.getX(i + 1);
+      const ic = indexAttr.getX(i + 2);
+
+      const ax = pos.getX(ia);
+      const ay = pos.getY(ia);
+      const az = pos.getZ(ia);
+
+      const bx = pos.getX(ib);
+      const by = pos.getY(ib);
+      const bz = pos.getZ(ib);
+
+      const cx = pos.getX(ic);
+      const cy = pos.getY(ic);
+      const cz = pos.getZ(ic);
+
+      const avgZ = (az + bz + cz) / 3;
+
+      if (avgZ >= thresholdZ) {
+        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      } else {
+        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      }
+    }
+  } else {
+    for (let i = 0; i < pos.count; i += 3) {
+      const ax = pos.getX(i);
+      const ay = pos.getY(i);
+      const az = pos.getZ(i);
+
+      const bx = pos.getX(i + 1);
+      const by = pos.getY(i + 1);
+      const bz = pos.getZ(i + 1);
+
+      const cx = pos.getX(i + 2);
+      const cy = pos.getY(i + 2);
+      const cz = pos.getZ(i + 2);
+
+      const avgZ = (az + bz + cz) / 3;
+
+      if (avgZ >= thresholdZ) {
+        pushTriangle(highPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      } else {
+        pushTriangle(lowPositions, ax, ay, az, bx, by, bz, cx, cy, cz);
+      }
+    }
+  }
+
+  function buildGeometry(positions) {
+    if (positions.length === 0) return null;
+
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    g.computeVertexNormals();
+    g.computeBoundingBox();
+    return g;
+  }
+
+  return {
+    low: buildGeometry(lowPositions),
+    high: buildGeometry(highPositions)
+  };
+}
+
+function normalizeLayerHeight(geom, layerType) {
+  geom.computeBoundingBox();
+
+  if (!geom.boundingBox) return;
+
+  const box = geom.boundingBox;
+  const minZ = box.min.z;
+  const maxZ = box.max.z;
+
+  if (layerType === 'land') {
+    geom.translate(0, 0, -maxZ + layerHeightOffset.land);
     return;
   }
+
+  if (layerType === 'road') {
+    geom.translate(0, 0, -minZ + layerHeightOffset.road);
+    return;
+  }
+
+  if (layerType === 'building') {
+    geom.translate(0, 0, -minZ + layerHeightOffset.building);
+    return;
+  }
+
+  geom.translate(0, 0, -minZ + layerHeightOffset.other);
+}
+
+function fixGeometryWindingToFaceUp(geom, layerType) {
+  if (!geom || !geom.attributes || !geom.attributes.position) return;
+
+  geom.computeVertexNormals();
+
+  const normalAttr = geom.attributes.normal;
+  if (!normalAttr) return;
+
+  let sumZ = 0;
+  let count = 0;
+
+  for (let i = 0; i < normalAttr.count; i++) {
+    sumZ += normalAttr.getZ(i);
+    count++;
+  }
+
+  if (count === 0) return;
+
+  const avgZ = sumZ / count;
+
+  if (avgZ < 0) {
+    const pos = geom.attributes.position;
+    const indexAttr = geom.index;
+
+    if (indexAttr) {
+      for (let i = 0; i < indexAttr.count; i += 3) {
+        const a = indexAttr.getX(i);
+        const b = indexAttr.getX(i + 1);
+        const c = indexAttr.getX(i + 2);
+
+        indexAttr.setX(i, a);
+        indexAttr.setX(i + 1, c);
+        indexAttr.setX(i + 2, b);
+      }
+
+      indexAttr.needsUpdate = true;
+    } else {
+      for (let i = 0; i < pos.count; i += 3) {
+        const bx = pos.getX(i + 1);
+        const by = pos.getY(i + 1);
+        const bz = pos.getZ(i + 1);
+
+        const cx = pos.getX(i + 2);
+        const cy = pos.getY(i + 2);
+        const cz = pos.getZ(i + 2);
+
+        pos.setXYZ(i + 1, cx, cy, cz);
+        pos.setXYZ(i + 2, bx, by, bz);
+      }
+
+      pos.needsUpdate = true;
+    }
+
+    geom.computeVertexNormals();
+    geom.computeBoundingBox();
+  }
+}
+
+function getLayerRenderOrder(layerType) {
+  if (layerType === 'land') return 10;
+  if (layerType === 'building') return 20;
+  if (layerType === 'road') return 30;
+  return 25;
+}
+
+function makeSolidMaterialForLayer(colorValue, layerType) {
+  const THREE = AFRAME.THREE;
+
+  let polygonOffsetFactor = 0;
+  let polygonOffsetUnits = 0;
+
+  if (layerType === 'road') {
+    polygonOffsetFactor = -8;
+    polygonOffsetUnits = -8;
+  } else if (layerType === 'building') {
+    polygonOffsetFactor = -2;
+    polygonOffsetUnits = -2;
+  } else if (layerType === 'land') {
+    polygonOffsetFactor = 2;
+    polygonOffsetUnits = 2;
+  }
+
+  return new THREE.MeshStandardMaterial({
+    color: colorValue,
+    side: THREE.DoubleSide,
+    roughness: 0.82,
+    metalness: 0.02,
+    flatShading: true,
+    transparent: false,
+    opacity: 1.0,
+    depthTest: true,
+    depthWrite: true,
+    polygonOffset: true,
+    polygonOffsetFactor: polygonOffsetFactor,
+    polygonOffsetUnits: polygonOffsetUnits
+  });
+}
+
+function addLayerMesh(geom, layerType) {
+  const THREE = AFRAME.THREE;
+  const colors = colorSets[colorMode % colorSets.length];
+
+  fixGeometryWindingToFaceUp(geom, layerType);
+
+  let colorValue = colors.other;
+  if (layerType === 'land') colorValue = colors.land;
+  if (layerType === 'building') colorValue = colors.building;
+  if (layerType === 'road') colorValue = colors.road;
+
+  const material = makeSolidMaterialForLayer(colorValue, layerType);
+
+  const mesh = new THREE.Mesh(geom, material);
+  mesh.visible = true;
+  mesh.frustumCulled = false;
+  mesh.renderOrder = getLayerRenderOrder(layerType);
+
+  proxyGroup.add(mesh);
+}
+
+function updateProxyRotation() {
+  if (!proxyGroup) return;
+
+  const THREE = AFRAME.THREE;
+  const pitchDeg = angleModes[angleMode].pitchDeg;
+
+  const totalPitch = THREE.MathUtils.degToRad(baseFlipXDeg + pitchDeg);
+  const zYaw = yawMode % 2 === 0 ? 0 : Math.PI;
+
+  proxyGroup.rotation.set(totalPitch, 0, zYaw);
+}
+
+function extractMeshesToProxy(preserveTransform = true) {
+  const THREE = AFRAME.THREE;
+
+  clearProxyGroup();
+
+  const sourceRoot = originalEl.object3D;
+  sourceRoot.updateMatrixWorld(true);
+
+  const counts = countSourceMeshes();
+
+  if (counts.meshCount === 0) {
+    statusEl.textContent =
+      '元GLBのメッシュが0です。\n' +
+      'shiomi_city.glb の中身または読み込み状態を確認してください。';
+    return;
+  }
+
+  const inverseRootMatrix = sourceRoot.matrixWorld.clone().invert();
+
+  const items = [];
+  const totalBox = new THREE.Box3();
+  let hasBox = false;
+
+  sourceRoot.traverse((node) => {
+    if (!node.isMesh || !node.geometry) return;
+
+    const positionAttr = node.geometry.attributes.position;
+    if (!positionAttr || positionAttr.count === 0) return;
+
+    const geom = node.geometry.clone();
+
+    const relativeMatrix = new THREE.Matrix4().multiplyMatrices(
+      inverseRootMatrix,
+      node.matrixWorld
+    );
+
+    geom.applyMatrix4(relativeMatrix);
+    remapYUpToARZUp(geom);
+
+    geom.computeVertexNormals();
+    geom.computeBoundingBox();
+
+    if (geom.boundingBox) {
+      totalBox.union(geom.boundingBox);
+      hasBox = true;
+    }
+
+    items.push({
+      geometry: geom,
+      name: node.name || '',
+      volume: getGeometryVolume(geom)
+    });
+  });
+
+  if (!hasBox || items.length === 0) {
+    statusEl.textContent =
+      'メッシュはありますが、頂点情報を取得できません。';
+    return;
+  }
+
+  items.sort((a, b) => b.volume - a.volume);
 
   const size = new THREE.Vector3();
   const center = new THREE.Vector3();
 
-  box.getSize(size);
-  box.getCenter(center);
+  totalBox.getSize(size);
+  totalBox.getCenter(center);
+
+  boxSizeText =
+    size.x.toFixed(4) + ', ' +
+    size.y.toFixed(4) + ', ' +
+    size.z.toFixed(4);
+
+  boxCenterText =
+    center.x.toFixed(4) + ', ' +
+    center.y.toFixed(4) + ', ' +
+    center.z.toFixed(4);
 
   const maxDim = Math.max(size.x, size.y, size.z);
 
   if (!isFinite(maxDim) || maxDim <= 0) {
     statusEl.textContent =
-      "GLBサイズが不正です。\n" +
-      "maxDim: " + maxDim;
+      'モデルサイズの計算に失敗しました。\n' +
+      'box size: ' + boxSizeText;
     return;
   }
 
   const desiredSize = 0.78;
-  autoFitScale = desiredSize / maxDim;
-  autoFitScale = Math.max(0.0001, Math.min(1000, autoFitScale));
+  innerScale = desiredSize / maxDim;
+  innerScale = Math.max(0.001, Math.min(200, innerScale));
 
-  shiomiMindAR.object3D.position.set(-center.x, -center.y, -center.z);
+  proxyGroup = new THREE.Group();
+  proxyGroup.name = 'shiomi_proxy_group';
 
-  currentScale = autoFitScale;
+  items.forEach((item, index) => {
+    const baseGeom = item.geometry;
 
-  applyMindARTransform(false);
+    baseGeom.translate(-center.x, -center.y, -center.z);
+    baseGeom.scale(innerScale, innerScale, innerScale);
+
+    if (index === 0) {
+      const split = splitGeometryByHeight(baseGeom, buildingSplitRatio);
+
+      if (split.low) {
+        normalizeLayerHeight(split.low, 'land');
+        addLayerMesh(split.low, 'land');
+      }
+
+      if (split.high) {
+        normalizeLayerHeight(split.high, 'building');
+        addLayerMesh(split.high, 'building');
+      }
+    } else {
+      normalizeLayerHeight(baseGeom, 'road');
+      addLayerMesh(baseGeom, 'road');
+    }
+  });
+
+  proxyMeshCount = proxyGroup.children.length;
+
+  proxyGroup.position.set(0, 0, 0);
+  proxyGroup.scale.set(1, 1, 1);
+
+  modelRoot.object3D.add(proxyGroup);
+
+  originalEl.object3D.visible = false;
+  modelRoot.object3D.visible = true;
+
+  if (!preserveTransform) {
+    const mode = angleModes[angleMode];
+    currentY = mode.y;
+    currentZ = mode.z;
+    rootScale = 1.0;
+  }
+
+  updateProxyRotation();
+  applyRootTransform(false);
+
+  statusEl.textContent =
+    'モデルを表示しました。\n' +
+    'X軸180度反転＋平行表示です。\n' +
+    '土地・道路・建物はすべて両面表示です。\n' +
+    '建物高さの初期値は -0.060 です。\n' +
+    '固定したい場合は「この位置に固定」または「タップ位置に固定」を使ってください。\n' +
+    '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
+    '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+    '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+    '建物: ' + layerHeightOffset.building.toFixed(3) + '\n' +
+    'proxyMeshCount: ' + proxyMeshCount;
 }
 
-function applyMindARTransform(showMessage = true) {
-  const angle = angleModes[angleMode];
-  const rotZ = yawMode % 2 === 0 ? 0 : 180;
+originalEl.addEventListener('model-loaded', () => {
+  modelLoaded = true;
 
-  currentY = angle.y;
-  currentZ = angle.z;
+  statusEl.textContent =
+    'GLBを読み込みました。\n' +
+    'メッシュを生成しています。';
 
-  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
-  modelHolder.setAttribute("rotation", angle.rotX + " 0 " + rotZ);
-  modelHolder.setAttribute("scale", currentScale + " " + currentScale + " " + currentScale);
+  setTimeout(() => {
+    extractMeshesToProxy(false);
+  }, 500);
+});
+
+originalEl.addEventListener('model-error', (e) => {
+  console.error('model-error', e);
+
+  modelLoaded = false;
+
+  statusEl.textContent =
+    'GLBの読み込みに失敗しました。\n' +
+    '確認してください：\n' +
+    '1. shiomi_city.glb が index.html と同じフォルダにあるか\n' +
+    '2. ファイル名の大文字小文字が一致しているか\n' +
+    '3. GLBファイルが壊れていないか';
+});
+
+function applyRootTransform(showMessage = true) {
+  modelRoot.object3D.position.set(currentX, currentY, currentZ);
+  modelRoot.object3D.scale.set(rootScale, rootScale, rootScale);
+
+  modelBounds.object3D.position.set(currentX, currentY, currentZ);
+  modelBounds.object3D.scale.set(rootScale, rootScale, rootScale);
 
   if (showMessage) {
     statusEl.textContent =
-      "MindAR表示を調整しました。\n" +
-      "scale: " + currentScale.toFixed(6) + "\n" +
-      "X: " + currentX.toFixed(3) + "\n" +
-      "Y: " + currentY.toFixed(3) + "\n" +
-      "Z: " + currentZ.toFixed(3) + "\n" +
-      "角度: " + angle.name + "\n" +
-      "回転: " + (yawMode % 2 === 0 ? "0度" : "180度");
+      '表示調整中です。\n' +
+      'rootScale: ' + rootScale.toFixed(3) + '\n' +
+      'X: ' + currentX.toFixed(3) + '\n' +
+      'Y: ' + currentY.toFixed(3) + '\n' +
+      'Z: ' + currentZ.toFixed(3) + '\n' +
+      '角度: ' + angleModes[angleMode].name + '\n' +
+      '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
+      '土地: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+      '道路: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+      '建物: ' + layerHeightOffset.building.toFixed(3);
   }
 }
 
-largerBtn.addEventListener("click", () => {
-  currentScale = Math.min(1000, currentScale * 1.2);
-  applyMindARTransform();
+function adjustLayerHeight(layer, delta) {
+  layerHeightOffset[layer] += delta;
+  extractMeshesToProxy(true);
+}
+
+function adjustBuildingSplit(delta) {
+  buildingSplitRatio += delta;
+  buildingSplitRatio = Math.max(0.02, Math.min(0.80, buildingSplitRatio));
+  extractMeshesToProxy(true);
+}
+
+function disposePinnedGroup() {
+  if (pinnedGroup) {
+    pinnedRoot.object3D.remove(pinnedGroup);
+    pinnedGroup.traverse((node) => {
+      if (node.geometry) node.geometry.dispose && node.geometry.dispose();
+      if (node.material) {
+        if (Array.isArray(node.material)) {
+          node.material.forEach(mat => mat.dispose && mat.dispose());
+        } else {
+          node.material.dispose && node.material.dispose();
+        }
+      }
+    });
+    pinnedGroup = null;
+  }
+}
+
+function createPinnedClone() {
+  if (!proxyGroup) {
+    statusEl.textContent =
+      'まだモデルが生成されていません。\n' +
+      '名刺を認識してモデルが表示されてから固定してください。';
+    return null;
+  }
+
+  disposePinnedGroup();
+
+  const clone = proxyGroup.clone(true);
+
+  clone.traverse((node) => {
+    node.visible = true;
+    node.frustumCulled = false;
+  });
+
+  return clone;
+}
+
+function pinCurrentModelPosition() {
+  const clone = createPinnedClone();
+  if (!clone) return;
+
+  modelRoot.object3D.updateWorldMatrix(true, true);
+
+  pinnedRoot.object3D.matrixAutoUpdate = false;
+  pinnedRoot.object3D.matrix.copy(modelRoot.object3D.matrixWorld);
+
+  pinnedRoot.object3D.add(clone);
+  pinnedGroup = clone;
+
+  pinnedRoot.setAttribute('visible', 'true');
+  isPinned = true;
+
+  modelRoot.setAttribute('visible', 'false');
+
+  statusEl.textContent =
+    '現在の位置にモデルを固定しました。\n' +
+    '名刺を画面外にしても固定モデルを表示し続けます。\n' +
+    'これはMindAR上の簡易固定です。';
+}
+
+function placePinnedAtScreenPoint(clientX, clientY) {
+  const clone = createPinnedClone();
+  if (!clone) return;
+
+  const THREE = AFRAME.THREE;
+  const rect = sceneEl.canvas.getBoundingClientRect();
+
+  const mouse = new THREE.Vector2(
+    ((clientX - rect.left) / rect.width) * 2 - 1,
+    -((clientY - rect.top) / rect.height) * 2 + 1
+  );
+
+  const raycaster = new THREE.Raycaster();
+  const camera = sceneEl.camera;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  /*
+    MindAR単体では机の平面検出はできないため、
+    カメラから一定距離の仮想位置に配置します。
+    物理的な机固定ではなく、タップ位置に近い見た目の簡易固定です。
+  */
+  const distance = 1.2;
+  const point = new THREE.Vector3();
+  raycaster.ray.at(distance, point);
+
+  pinnedRoot.object3D.matrixAutoUpdate = true;
+  pinnedRoot.object3D.position.copy(point);
+  pinnedRoot.object3D.rotation.set(0, 0, 0);
+  pinnedRoot.object3D.scale.set(1, 1, 1);
+
+  pinnedRoot.object3D.add(clone);
+  pinnedGroup = clone;
+
+  pinnedRoot.setAttribute('visible', 'true');
+  isPinned = true;
+  waitingForTapPlacement = false;
+
+  modelRoot.setAttribute('visible', 'false');
+
+  statusEl.textContent =
+    'タップ位置にモデルを簡易固定しました。\n' +
+    'MindAR単体では机・床の平面検出はできないため、カメラから一定距離の仮想位置に配置しています。\n' +
+    '物理的な机固定を行うにはWebXR hit-test方式が必要です。';
+}
+
+function clearPinnedModel() {
+  disposePinnedGroup();
+
+  pinnedRoot.setAttribute('visible', 'false');
+
+  pinnedRoot.object3D.matrix.identity();
+  pinnedRoot.object3D.matrixAutoUpdate = true;
+  pinnedRoot.object3D.position.set(0, 0, 0);
+  pinnedRoot.object3D.rotation.set(0, 0, 0);
+  pinnedRoot.object3D.scale.set(1, 1, 1);
+
+  isPinned = false;
+  waitingForTapPlacement = false;
+
+  modelRoot.setAttribute('visible', 'true');
+
+  statusEl.textContent =
+    '固定を解除しました。\n' +
+    '名刺を認識すると、モデルは再び名刺に追従します。';
+}
+
+sceneEl.addEventListener('click', (ev) => {
+  if (!waitingForTapPlacement) return;
+
+  placePinnedAtScreenPoint(ev.clientX, ev.clientY);
 });
 
-smallerBtn.addEventListener("click", () => {
-  currentScale = Math.max(0.00001, currentScale / 1.2);
-  applyMindARTransform();
+sceneEl.addEventListener('touchstart', (ev) => {
+  if (!waitingForTapPlacement) return;
+  if (!ev.touches || ev.touches.length === 0) return;
+
+  const t = ev.touches[0];
+  placePinnedAtScreenPoint(t.clientX, t.clientY);
 });
 
-frontBtn.addEventListener("click", () => {
+largerBtn.addEventListener('click', () => {
+  rootScale = Math.min(50, rootScale * 1.20);
+  applyRootTransform();
+});
+
+smallerBtn.addEventListener('click', () => {
+  rootScale = Math.max(0.001, rootScale / 1.20);
+  applyRootTransform();
+});
+
+frontBtn.addEventListener('click', () => {
   currentZ += 0.08;
-  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
-  statusEl.textContent =
-    "全体を前へ移動しました。\n" +
-    "Z: " + currentZ.toFixed(3);
+  applyRootTransform();
 });
 
-backBtn.addEventListener("click", () => {
+backBtn.addEventListener('click', () => {
   currentZ -= 0.08;
-  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
-  statusEl.textContent =
-    "全体を奥へ移動しました。\n" +
-    "Z: " + currentZ.toFixed(3);
+  applyRootTransform();
 });
 
-upBtn.addEventListener("click", () => {
+upBtn.addEventListener('click', () => {
   currentY += 0.08;
-  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
-  statusEl.textContent =
-    "全体を上へ移動しました。\n" +
-    "Y: " + currentY.toFixed(3);
+  applyRootTransform();
 });
 
-downBtn.addEventListener("click", () => {
+downBtn.addEventListener('click', () => {
   currentY -= 0.08;
-  modelHolder.setAttribute("position", currentX + " " + currentY + " " + currentZ);
-  statusEl.textContent =
-    "全体を下へ移動しました。\n" +
-    "Y: " + currentY.toFixed(3);
+  applyRootTransform();
 });
 
-rotateBtn.addEventListener("click", () => {
+/*
+  建物ボタンは見た目に合わせて逆向きに調整済み。
+  建物↑ → 数値をマイナス方向へ
+  建物↓ → 数値をプラス方向へ
+*/
+buildingUpBtn.addEventListener('click', () => {
+  adjustLayerHeight('building', -0.020);
+});
+
+buildingDownBtn.addEventListener('click', () => {
+  adjustLayerHeight('building', 0.020);
+});
+
+roadUpBtn.addEventListener('click', () => {
+  adjustLayerHeight('road', 0.015);
+});
+
+roadDownBtn.addEventListener('click', () => {
+  adjustLayerHeight('road', -0.015);
+});
+
+landUpBtn.addEventListener('click', () => {
+  adjustLayerHeight('land', 0.015);
+});
+
+landDownBtn.addEventListener('click', () => {
+  adjustLayerHeight('land', -0.015);
+});
+
+splitDownBtn.addEventListener('click', () => {
+  adjustBuildingSplit(-0.03);
+});
+
+splitUpBtn.addEventListener('click', () => {
+  adjustBuildingSplit(0.03);
+});
+
+heightResetBtn.addEventListener('click', () => {
+  layerHeightOffset = {
+    land: defaultLayerHeightOffset.land,
+    road: defaultLayerHeightOffset.road,
+    building: defaultLayerHeightOffset.building,
+    other: defaultLayerHeightOffset.other
+  };
+
+  buildingSplitRatio = 0.18;
+
+  extractMeshesToProxy(true);
+});
+
+rotateBtn.addEventListener('click', () => {
   yawMode = (yawMode + 1) % 2;
-  applyMindARTransform();
+  updateProxyRotation();
+  applyRootTransform();
 
   statusEl.textContent =
-    "モデルをZ軸で180度回転しました。\n" +
-    "現在: " + (yawMode % 2 === 0 ? "0度" : "180度");
+    'モデルをZ軸で180度回転しました。\n' +
+    '現在: ' + (yawMode % 2 === 0 ? '0度' : '180度');
 });
 
-angleBtn.addEventListener("click", () => {
+angleBtn.addEventListener('click', () => {
   angleMode = (angleMode + 1) % angleModes.length;
-  applyMindARTransform();
+
+  const mode = angleModes[angleMode];
+
+  currentY = mode.y;
+  currentZ = mode.z;
+
+  updateProxyRotation();
+  applyRootTransform();
 
   statusEl.textContent =
-    "角度を切り替えました。\n" +
-    "現在: " + angleModes[angleMode].name;
+    '角度を切り替えました。\n' +
+    '現在: ' + mode.name;
 });
 
-resetBtn.addEventListener("click", () => {
-  currentScale = autoFitScale || 1.0;
+colorBtn.addEventListener('click', () => {
+  colorMode = (colorMode + 1) % colorSets.length;
+  extractMeshesToProxy(true);
+});
+
+pinBtn.addEventListener('click', () => {
+  pinCurrentModelPosition();
+});
+
+tapPinBtn.addEventListener('click', () => {
+  if (!proxyGroup) {
+    statusEl.textContent =
+      'まだモデルが生成されていません。\n' +
+      '名刺を認識してモデルが表示されてから使用してください。';
+    return;
+  }
+
+  waitingForTapPlacement = true;
+
+  statusEl.textContent =
+    'タップ位置固定モードです。\n' +
+    '画面上で、モデルを置きたい位置をタップしてください。\n' +
+    'これは机・床の実平面検出ではなく、画面タップ位置への簡易配置です。';
+});
+
+clearPinBtn.addEventListener('click', () => {
+  clearPinnedModel();
+});
+
+resetBtn.addEventListener('click', () => {
+  rootScale = 1.0;
   currentX = 0.0;
-  currentY = 0.0;
-  currentZ = 0.28;
   yawMode = 0;
   angleMode = 0;
+  baseFlipXDeg = 180;
+  buildingSplitRatio = 0.18;
 
-  applyMindARTransform(false);
+  layerHeightOffset = {
+    land: defaultLayerHeightOffset.land,
+    road: defaultLayerHeightOffset.road,
+    building: defaultLayerHeightOffset.building,
+    other: defaultLayerHeightOffset.other
+  };
+
+  clearPinnedModel();
+
+  const mode = angleModes[angleMode];
+  currentY = mode.y;
+  currentZ = mode.z;
+
+  extractMeshesToProxy(false);
 
   statusEl.textContent =
-    "MindAR表示をリセットしました。\n" +
-    "自動スケール値に戻しました。";
+    '表示リセットしました。\n' +
+    'X軸180度反転、平行表示に戻しました。\n' +
+    '固定も解除しました。';
 });
 
-fixedBtn.addEventListener("click", () => {
-  location.href = "./fixed.html";
-});
+markerEl.addEventListener('targetFound', () => {
+  targetGuide.style.display = 'none';
+  foundBanner.style.display = 'block';
 
-markerEl.addEventListener("targetFound", () => {
-  targetGuide.style.display = "none";
-  foundBanner.style.display = "block";
+  modelBounds.setAttribute('visible', 'false');
+  debugBox.setAttribute('visible', 'false');
 
-  modelHolder.setAttribute("visible", "true");
+  if (isPinned) {
+    modelRoot.setAttribute('visible', 'false');
+    pinnedRoot.setAttribute('visible', 'true');
 
-  statusEl.textContent =
-    "潮見ジオラマを発見しました。\n" +
-    "MindARモードでは＋／－等で操作できます。\n" +
-    "床や机に固定したい場合は「床・机に固定AR」を押してください。";
+    statusEl.textContent =
+      '名刺を再認識しました。\n' +
+      '現在は固定表示中です。\n' +
+      '追従表示に戻す場合は「固定解除」を押してください。';
+  } else {
+    modelRoot.setAttribute('visible', 'true');
+
+    if (!proxyGroup && modelLoaded) {
+      extractMeshesToProxy(false);
+    }
+
+    statusEl.textContent =
+      '潮見ジオラマを発見しました。\n' +
+      '固定したい場合は「この位置に固定」または「タップ位置に固定」を押してください。';
+  }
 
   setTimeout(() => {
-    foundBanner.style.display = "none";
+    foundBanner.style.display = 'none';
   }, 2000);
 });
 
-markerEl.addEventListener("targetLost", () => {
+markerEl.addEventListener('targetLost', () => {
   if (!arStarted) return;
 
-  foundBanner.style.display = "none";
-  targetGuide.style.display = "block";
+  foundBanner.style.display = 'none';
+
+  if (isPinned) {
+    targetGuide.style.display = 'none';
+    pinnedRoot.setAttribute('visible', 'true');
+    modelRoot.setAttribute('visible', 'false');
+
+    statusEl.textContent =
+      '名刺を見失いましたが、固定モデルを表示しています。\n' +
+      '追従表示に戻す場合は「固定解除」を押してください。';
+    return;
+  }
+
+  targetGuide.style.display = 'block';
 
   statusEl.textContent =
-    "マーカーを見失いました。\n" +
-    "もう一度マーカーを画面中央に入れてください。";
+    'マーカーを見失いました。\n' +
+    '中央に入れてください。';
 });
 
 async function waitForMindARSystem() {
   for (let i = 0; i < 50; i++) {
-    const sys = sceneEl.systems["mindar-image-system"];
+    const sys = sceneEl.systems['mindar-image-system'];
     if (sys) return sys;
     await new Promise(r => setTimeout(r, 200));
   }
-
   return null;
 }
 
-startBtn.addEventListener("click", async () => {
+startBtn.addEventListener('click', async () => {
   try {
     if (!window.isSecureContext) {
-    
+      statusEl.textContent =
+        'HTTPSではありません。\n' +
+        'https:// のURLで開いてください。';
+      return;
+    }
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      statusEl.textContent =
+        'このブラウザではカメラAPIが使えません。\n' +
+        'iPhoneはSafari、AndroidはChromeで開いてください。';
+      return;
+    }
+
+    if (!sceneLoaded) {
+      statusEl.textContent =
+        'A-Frameシーンの読み込みがまだ完了していません。\n' +
+        '少し待つか、画面に表示されているエラーを確認してください。';
+      return;
+    }
+
+    const mindar = await waitForMindARSystem();
+
+    if (!mindar) {
+      statusEl.textContent =
+        'MindARシステムが見つかりません。\n' +
+        'A-Frame / MindAR のscriptタグを確認してください。';
+      return;
+    }
+
+    targetGuide.style.display = 'block';
+    statusEl.textContent =
+      'カメラを起動しています。\n' +
+      'カメラ許可をしてください。';
+
+    await mindar.start();
+
+    arStarted = true;
+
+    statusEl.textContent =
+      '探索中です。\n' +
+      'マーカーを画面中央に入れてください。';
+
+  } catch (err) {
+    console.error(err);
+
+    statusEl.textContent =
+      'カメラ開始に失敗しました。\n' +
+      (err.message || String(err));
+  }
+});
+
+stopBtn.addEventListener('click', () => {
+  const sys = sceneEl.systems['mindar-image-system'];
+
+  if (sys) {
+    sys.stop();
+  }
+
+  arStarted = false;
+  targetGuide.style.display = 'none';
+  foundBanner.style.display = 'none';
+
+  statusEl.textContent = '停止しました。';
+});
+
+checkBtn.addEventListener('click', () => {
+  const mindar = sceneEl.systems['mindar-image-system'];
+  const counts = countSourceMeshes();
+
+  let proxyChildren = 0;
+
+  if (proxyGroup) {
+    proxyChildren = proxyGroup.children.length;
+  }
+
+  statusEl.textContent =
+    '状態確認\n' +
+    'HTTPS: ' + window.isSecureContext + '\n' +
+    'sceneLoaded: ' + sceneLoaded + '\n' +
+    'MindAR: ' + Boolean(mindar) + '\n' +
+    'modelLoaded: ' + modelLoaded + '\n' +
+    'source childCount: ' + counts.childCount + '\n' +
+    'source meshCount: ' + counts.meshCount + '\n' +
+    'source visibleMeshCount: ' + counts.visibleMeshCount + '\n' +
+    'proxyGroup: ' + Boolean(proxyGroup) + '\n' +
+    'proxy children: ' + proxyChildren + '\n' +
+    'isPinned: ' + isPinned + '\n' +
+    'waitingForTapPlacement: ' + waitingForTapPlacement + '\n' +
+    'rootScale: ' + rootScale.toFixed(3) + '\n' +
+    'innerScale: ' + innerScale.toFixed(4) + '\n' +
+    'X: ' + currentX.toFixed(3) + '\n' +
+    'Y: ' + currentY.toFixed(3) + '\n' +
+    'Z: ' + currentZ.toFixed(3) + '\n' +
+    '角度: ' + angleModes[angleMode].name + '\n' +
+    '建物判定: ' + buildingSplitRatio.toFixed(2) + '\n' +
+    '土地高さ: ' + layerHeightOffset.land.toFixed(3) + '\n' +
+    '道路高さ: ' + layerHeightOffset.road.toFixed(3) + '\n' +
+    '建物高さ: ' + layerHeightOffset.building.toFixed(3) + '\n' +
+    'X軸反転: ' + baseFlipXDeg + '度\n' +
+    '回転: ' + (yawMode % 2 === 0 ? '0度' : '180度') + '\n' +
+    'box size: ' + boxSizeText + '\n' +
+    'box center: ' + boxCenterText;
+});
+</script>
+
+</body>
+</html>
